@@ -6,14 +6,22 @@ Uploaders: Thomas Goirand <zigo@debian.org>
 Build-Depends: debhelper (>= 9),
                python-all (>= 2.6.6-3~),
                python-setuptools,
+               python-sphinx,
                python3-all,
-               python3-setuptools,
-               python-sphinx
-Build-Depends-Indep: python-mako,
+               python3-setuptools
+Build-Depends-Indep: python-crypto,
+                     python-dateutil,
+                     python-decorator,
+                     python-mako,
                      python-memcache,
+                     python-openssl,
+                     python-paste,
                      python-pyasn1,
                      python-pytest,
                      python-repoze.who,
+                     python-requests,
+                     python-tz,
+                     python-zope.interface,
                      xmlsec1
 Standards-Version: 3.9.5
 X-Python-Version: >= 2.7
