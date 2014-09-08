@@ -1,0 +1,9 @@
+Document: python-pysaml2-doc
+Title: pysaml2 Documentation
+Author: N/A
+Abstract: Sphinx documentation for pysaml2
+Section: Programming/Python
+
+Format: HTML
+Index: /usr/share/doc/python-pysaml2-doc/html/index.html
+Files: /usr/share/doc/python-pysaml2-doc/html/*
