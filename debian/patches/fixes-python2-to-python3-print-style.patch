@@ -42,7 +42,7 @@ Last-Update: 2015-04-24
          #_err = exception_trace("RUN", err)
          #logging.error(exception_trace("RUN", _err))
 -        print >> sys.stderr, err
-+        print(err, file=sys.stderr)
++        print(err)
          resp = ServiceError("%s" % err)
          return resp(environ, start_response)
  
@@ -162,7 +162,7 @@ Last-Update: 2015-04-24
 -            print >> sys.stderr, \
 -                "Duplicated Entity descriptor (entity id: '%s')" % \
 -                entity_descr.entity_id
-+            print("Duplicated Entity descriptor (entity id: '%s')" % entity_descr.entity_id, file=sys.stderr)
++            print("Duplicated Entity descriptor (entity id: '%s')" % entity_descr.entity_id)
              return
  
          _ent = to_dict(entity_descr, self.onts)
@@ -288,7 +288,7 @@ Last-Update: 2015-04-24
              idb = shelve.open(dbspec, writeback=True)
          else:  # database spec is a a 2-tuple (type, address)
 -            #print >> sys.stderr, "DBSPEC: %s" % (dbspec,)
-+            #print("DBSPEC: %s" % (dbspec,), file=sys.stderr)
++            #print("DBSPEC: %s" % (dbspec,))
              (typ, addr) = dbspec
              if typ == "shelve":
                  idb = shelve.open(addr, writeback=True)
@@ -403,7 +403,7 @@ Last-Update: 2015-04-24
              elem = TIME_FORMAT_WITH_FRAGMENT.match(timestr)
          except Exception, exc:
 -            print >> sys.stderr, "Exception: %s on %s" % (exc, timestr)
-+            print("Exception: %s on %s" % (exc, timestr), file=sys.stderr)
++            print("Exception: %s on %s" % (exc, timestr))
              raise
          then = time.strptime(elem.groups()[0] + "Z", TIME_FORMAT)
  
