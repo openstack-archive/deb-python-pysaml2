@@ -1,0 +1,2786 @@
+Description: Fixes print statement -> print functions
+Author: Thomas Goirand <zigo@debian.org>
+Forwarded: no
+Last-Update: 2015-04-24
+
+--- python-pysaml2-2.0.0.orig/example/idp2/idp.py
++++ python-pysaml2-2.0.0/example/idp2/idp.py
+@@ -979,7 +979,7 @@ if __name__ == '__main__':
+     PORT = 8088
+ 
+     SRV = make_server('', PORT, application)
+-    print "IdP listening on port: %s" % PORT
++    print("IdP listening on port: %s" % PORT)
+     SRV.serve_forever()
+ else:
+     _rot = args.mako_root
+--- python-pysaml2-2.0.0.orig/example/idp2_repoze/idp.py
++++ python-pysaml2-2.0.0/example/idp2_repoze/idp.py
+@@ -980,7 +980,7 @@ if __name__ == '__main__':
+     PORT = 8088
+ 
+     SRV = make_server('', PORT, application)
+-    print "IdP listening on port: %s" % PORT
++    print("IdP listening on port: %s" % PORT)
+     SRV.serve_forever()
+ else:
+     _rot = args.mako_root
+--- python-pysaml2-2.0.0.orig/example/sp-repoze/sp.py
++++ python-pysaml2-2.0.0/example/sp-repoze/sp.py
+@@ -292,5 +292,5 @@ if __name__ == '__main__':
+ 
+     from wsgiref.simple_server import make_server
+     srv = make_server('', PORT, app_with_auth)
+-    print "SP listening on port: %s" % PORT
++    print("SP listening on port: %s" % PORT)
+     srv.serve_forever()
+\ No newline at end of file
+--- python-pysaml2-2.0.0.orig/example/sp-wsgi/sp.py
++++ python-pysaml2-2.0.0/example/sp-wsgi/sp.py
+@@ -677,7 +677,7 @@ def application(environ, start_response)
+     except Exception, err:
+         #_err = exception_trace("RUN", err)
+         #logging.error(exception_trace("RUN", _err))
+-        print >> sys.stderr, err
++        print(err, file=sys.stderr)
+         resp = ServiceError("%s" % err)
+         return resp(environ, start_response)
+ 
+@@ -733,7 +733,7 @@ if __name__ == '__main__':
+         SRV.ssl_adapter = ssl_pyopenssl.pyOpenSSLAdapter(SERVER_CERT,
+                                                          SERVER_KEY, CERT_CHAIN)
+     logger.info("Server starting")
+-    print "SP listening on port: %s" % PORT
++    print("SP listening on port: %s" % PORT)
+     try:
+         SRV.start()
+     except KeyboardInterrupt:
+--- python-pysaml2-2.0.0.orig/src/saml2/__init__.py
++++ python-pysaml2-2.0.0/src/saml2/__init__.py
+@@ -399,7 +399,7 @@ def make_vals(val, klass, klass_inst=Non
+     """
+     cinst = None
+ 
+-    #print "make_vals(%s, %s)" % (val, klass)
++    #print("make_vals(%s, %s)" % (val, klass))
+     
+     if isinstance(val, dict):
+         cinst = klass().loadd(val, base64encode=base64encode)
+@@ -610,7 +610,7 @@ class SamlBase(ExtensionContainer):
+         :return: The instance
+         """
+         
+-        #print "set_text: %s" % (val,)
++        #print("set_text: %s" % (val,))
+         if isinstance(val, bool):
+             if val:
+                 setattr(self, "text", "true")
+@@ -642,7 +642,7 @@ class SamlBase(ExtensionContainer):
+         """
+         
+         for prop, _typ, _req in self.c_attributes.values():
+-            #print "# %s" % (prop)
++            #print("# %s" % (prop))
+             if prop in ava:
+                 if isinstance(ava[prop], bool):
+                     setattr(self, prop, "%s" % ava[prop])
+@@ -655,9 +655,9 @@ class SamlBase(ExtensionContainer):
+             self.set_text(ava["text"], base64encode)
+             
+         for prop, klassdef in self.c_children.values():
+-            #print "## %s, %s" % (prop, klassdef)
++            #print("## %s, %s" % (prop, klassdef))
+             if prop in ava:
+-                #print "### %s" % ava[prop]
++                #print("### %s" % ava[prop])
+                 # means there can be a list of values
+                 if isinstance(klassdef, list): 
+                     make_vals(ava[prop], klassdef[0], self, prop,
+--- python-pysaml2-2.0.0.orig/src/saml2/attribute_converter.py
++++ python-pysaml2-2.0.0/src/saml2/attribute_converter.py
+@@ -218,9 +218,9 @@ def list_to_local(acs, attrlist, allow_u
+ 
+ def from_local(acs, ava, name_format):
+     for aconv in acs:
+-        #print ac.format, name_format
++        #print(ac.format, name_format)
+         if aconv.name_format == name_format:
+-            #print "Found a name_form converter"
++            #print("Found a name_form converter")
+             return aconv.to_(ava)
+ 
+     return None
+@@ -234,9 +234,9 @@ def from_local_name(acs, attr, name_form
+     :return: An Attribute instance
+     """
+     for aconv in acs:
+-        #print ac.format, name_format
++        #print(ac.format, name_format)
+         if aconv.name_format == name_format:
+-            #print "Found a name_form converter"
++            #print("Found a name_form converter")
+             return aconv.to_format(attr)
+     return attr
+ 
+--- python-pysaml2-2.0.0.orig/src/saml2/ecp_client.py
++++ python-pysaml2-2.0.0/src/saml2/ecp_client.py
+@@ -226,7 +226,7 @@ class Client(Entity):
+             # url I started off with.
+             pass
+         else:
+-            print response.error
++            print(response.error)
+             raise SAMLError(
+                 "Error POSTing package to SP: %s" % response.error)
+ 
+@@ -303,7 +303,7 @@ class Client(Entity):
+         except (soap.XmlParseError, AssertionError, KeyError):
+             pass
+ 
+-        #print "RESP",response, self.http.response
++        #print("RESP",response, self.http.response)
+ 
+         if  response.status_code != 404:
+             raise SAMLError("Error performing operation: %s" % (
+--- python-pysaml2-2.0.0.orig/src/saml2/httpbase.py
++++ python-pysaml2-2.0.0/src/saml2/httpbase.py
+@@ -121,7 +121,7 @@ class HTTPBase(object):
+         for _, a in list(self.cookiejar._cookies.items()):
+             for _, b in a.items():
+                 for cookie in list(b.values()):
+-                    # print cookie
++                    # print(cookie)
+                     if cookie.expires and cookie.expires <= now:
+                         continue
+                     if not re.search("%s$" % cookie.domain, _domain):
+--- python-pysaml2-2.0.0.orig/src/saml2/mdstore.py
++++ python-pysaml2-2.0.0/src/saml2/mdstore.py
+@@ -144,9 +144,7 @@ class MetaData(object):
+ 
+         # have I seen this entity_id before ? If so if log: ignore it
+         if entity_descr.entity_id in self.entity:
+-            print >> sys.stderr, \
+-                "Duplicated Entity descriptor (entity id: '%s')" % \
+-                entity_descr.entity_id
++            print("Duplicated Entity descriptor (entity id: '%s')" % entity_descr.entity_id, file=sys.stderr)
+             return
+ 
+         _ent = to_dict(entity_descr, self.onts)
+--- python-pysaml2-2.0.0.orig/src/saml2/pack.py
++++ python-pysaml2-2.0.0/src/saml2/pack.py
+@@ -221,11 +221,11 @@ def parse_soap_enveloped_saml(text, body
+     envelope = ElementTree.fromstring(text)
+     assert envelope.tag == '{%s}Envelope' % NAMESPACE
+ 
+-    #print len(envelope)
++    #print(len(envelope))
+     body = None
+     header = {}
+     for part in envelope:
+-        #print ">",part.tag
++        #print(">",part.tag)
+         if part.tag == '{%s}Body' % NAMESPACE:
+             for sub in part:
+                 try:
+@@ -236,11 +236,11 @@ def parse_soap_enveloped_saml(text, body
+         elif part.tag == '{%s}Header' % NAMESPACE:
+             if not header_class:
+                 raise Exception("Header where I didn't expect one")
+-            #print "--- HEADER ---"
++            #print("--- HEADER ---")
+             for sub in part:
+-                #print ">>",sub.tag
++                #print(">>",sub.tag)
+                 for klass in header_class:
+-                    #print "?{%s}%s" % (klass.c_namespace,klass.c_tag)
++                    #print("?{%s}%s" % (klass.c_namespace,klass.c_tag))
+                     if sub.tag == "{%s}%s" % (klass.c_namespace, klass.c_tag):
+                         header[sub.tag] = \
+                             saml2.create_class_from_element_tree(klass, sub)
+--- python-pysaml2-2.0.0.orig/src/saml2/request.py
++++ python-pysaml2-2.0.0/src/saml2/request.py
+@@ -68,8 +68,8 @@ class Request(object):
+                                      self.timeslack).timetuple()
+         lower = time_util.shift_time(time_util.time_a_while_ago(days=1),
+                                      - self.timeslack).timetuple()
+-        # print "issue_instant: %s" % self.message.issue_instant
+-        # print "%s < x < %s" % (lower, upper)
++        # print("issue_instant: %s" % self.message.issue_instant)
++        # print("%s < x < %s" % (lower, upper))
+         issued_at = time_util.str_to_time(self.message.issue_instant)
+         return issued_at > lower and issued_at < upper
+ 
+--- python-pysaml2-2.0.0.orig/src/saml2/response.py
++++ python-pysaml2-2.0.0/src/saml2/response.py
+@@ -214,7 +214,7 @@ def for_me(conditions, myself):
+             if audience.text.strip() == myself:
+                 return True
+             else:
+-                #print "Not for me: %s != %s" % (audience.text.strip(), myself)
++                #print("Not for me: %s != %s" % (audience.text.strip(), myself))
+                 pass
+     
+     return False
+@@ -330,7 +330,7 @@ class StatusResponse(object):
+             #logger.exception("EXCEPTION: %s", excp)
+             raise
+     
+-        #print "<", self.response
++        #print("<", self.response)
+         
+         return self._postamble()
+     
+@@ -362,8 +362,8 @@ class StatusResponse(object):
+                                      self.timeslack).timetuple()
+         lower = time_util.shift_time(time_util.time_a_while_ago(days=1),
+                                      -self.timeslack).timetuple()
+-        # print "issue_instant: %s" % self.response.issue_instant
+-        # print "%s < x < %s" % (lower, upper)
++        # print("issue_instant: %s" % self.response.issue_instant)
++        # print("%s < x < %s" % (lower, upper))
+         issued_at = str_to_time(self.response.issue_instant)
+         return lower < issued_at < upper
+ 
+@@ -1025,7 +1025,7 @@ class AssertionIDResponse(object):
+             logger.exception("EXCEPTION: %s", excp)
+             raise
+ 
+-        #print "<", self.response
++        #print("<", self.response)
+ 
+         return self._postamble()
+ 
+--- python-pysaml2-2.0.0.orig/src/saml2/s_utils.py
++++ python-pysaml2-2.0.0/src/saml2/s_utils.py
+@@ -423,7 +423,7 @@ def dynamic_importer(name, class_name=No
+     try:
+         fp, pathname, description = imp.find_module(name)
+     except ImportError:
+-        print "unable to locate module: " + name
++        print("unable to locate module: " + name)
+         return None, None
+ 
+     try:
+--- python-pysaml2-2.0.0.orig/src/saml2/saml.py
++++ python-pysaml2-2.0.0/src/saml2/saml.py
+@@ -89,7 +89,7 @@ def _decode_attribute_value(typ, text):
+ 
+ 
+ def _verify_value_type(typ, val):
+-    #print "verify value type: %s, %s" % (typ, val)
++    #print("verify value type: %s, %s" % (typ, val))
+     if typ == XSD + "string":
+         try:
+             return str(val)
+@@ -242,7 +242,7 @@ class AttributeValueBase(SamlBase):
+         for attribute, value in tree.attrib.iteritems():
+             self._convert_element_attribute_to_member(attribute, value)
+         if tree.text:
+-            #print "set_text:", tree.text
++            #print("set_text:", tree.text)
+             # clear type
+             #self.clear_type()
+             self.set_text(tree.text)
+--- python-pysaml2-2.0.0.orig/src/saml2/server.py
++++ python-pysaml2-2.0.0/src/saml2/server.py
+@@ -129,7 +129,7 @@ class Server(Entity):
+         elif isinstance(dbspec, basestring):
+             idb = shelve.open(dbspec, writeback=True)
+         else:  # database spec is a a 2-tuple (type, address)
+-            #print >> sys.stderr, "DBSPEC: %s" % (dbspec,)
++            #print("DBSPEC: %s" % (dbspec,), file=sys.stderr)
+             (typ, addr) = dbspec
+             if typ == "shelve":
+                 idb = shelve.open(addr, writeback=True)
+--- python-pysaml2-2.0.0.orig/src/saml2/sigver.py
++++ python-pysaml2-2.0.0/src/saml2/sigver.py
+@@ -226,7 +226,7 @@ def _make_vals(val, klass, seccont, klas
+     """
+     cinst = None
+ 
+-    #print "make_vals(%s, %s)" % (val, klass)
++    #print("make_vals(%s, %s)" % (val, klass))
+ 
+     if isinstance(val, dict):
+         cinst = _instance(klass, val, seccont, base64encode=base64encode,
+@@ -255,7 +255,7 @@ def _instance(klass, ava, seccont, base6
+     instance = klass()
+ 
+     for prop in instance.c_attributes.values():
+-        #print "# %s" % (prop)
++        #print("# %s" % (prop))
+         if prop in ava:
+             if isinstance(ava[prop], bool):
+                 setattr(instance, prop, "%s" % ava[prop])
+@@ -268,9 +268,9 @@ def _instance(klass, ava, seccont, base6
+         instance.set_text(ava["text"], base64encode)
+ 
+     for prop, klassdef in instance.c_children.values():
+-        #print "## %s, %s" % (prop, klassdef)
++        #print("## %s, %s" % (prop, klassdef))
+         if prop in ava:
+-            #print "### %s" % ava[prop]
++            #print("### %s" % ava[prop])
+             if isinstance(klassdef, list):
+                 # means there can be a list of values
+                 _make_vals(ava[prop], klassdef[0], seccont, instance, prop,
+@@ -310,9 +310,9 @@ def signed_instance_factory(instance, se
+             signed_xml = seccont.sign_statement(
+                 signed_xml, class_name=node_name, node_id=nodeid)
+ 
+-        #print "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+-        #print "%s" % signed_xml
+-        #print "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
++        #print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
++        #print("%s" % signed_xml)
++        #print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+         return signed_xml
+     else:
+         return instance
+@@ -405,7 +405,7 @@ def cert_from_key_info(key_info, ignore_
+     """
+     res = []
+     for x509_data in key_info.x509_data:
+-        #print "X509Data",x509_data
++        #print("X509Data",x509_data)
+         x509_certificate = x509_data.x509_certificate
+         cert = x509_certificate.text.strip()
+         cert = "\n".join(split_len("".join([s.strip() for s in
+@@ -850,15 +850,15 @@ class CryptoBackendXmlSec1(CryptoBackend
+ 
+         if self.__DEBUG:
+             try:
+-                print " ".join(com_list)
++                print(" ".join(com_list))
+             except TypeError:
+-                print "cert_type", cert_type
+-                print "cert_file", cert_file
+-                print "node_name", node_name
+-                print "fil", fil
++                print("cert_type", cert_type)
++                print("cert_file", cert_file)
++                print("node_name", node_name)
++                print("fil", fil)
+                 raise
+-            print "%s: %s" % (cert_file, os.access(cert_file, os.F_OK))
+-            print "%s: %s" % (fil, os.access(fil, os.F_OK))
++            print("%s: %s" % (cert_file, os.access(cert_file, os.F_OK)))
++            print("%s: %s" % (fil, os.access(fil, os.F_OK)))
+ 
+         (_stdout, stderr, _output) = self._run_xmlsec(com_list, [fil],
+                                                       exception=SignatureError)
+@@ -1266,7 +1266,7 @@ class SecurityContext(object):
+     def _check_signature(self, decoded_xml, item, node_name=NODE_NAME,
+                          origdoc=None, id_attr="", must=False,
+                          only_valid_cert=False):
+-        #print item
++        #print(item)
+         try:
+             issuer = item.issuer.text.strip()
+         except AttributeError:
+@@ -1298,7 +1298,7 @@ class SecurityContext(object):
+         if not certs:
+             raise MissingKey("%s" % issuer)
+ 
+-        #print certs
++        #print(certs)
+ 
+         verified = False
+         last_pem_file = None
+--- python-pysaml2-2.0.0.orig/src/saml2/time_util.py
++++ python-pysaml2-2.0.0/src/saml2/time_util.py
+@@ -84,7 +84,7 @@ def parse_duration(duration):
+     dic = dict([(typ, 0) for (code, typ) in D_FORMAT])
+     
+     for code, typ in D_FORMAT:
+-        #print duration[index:], code
++        #print(duration[index:], code)
+         if duration[index] == '-':
+             raise Exception("Negation not allowed on individual items")
+         if code == "T":
+@@ -243,7 +243,7 @@ def str_to_time(timestr, format=TIME_FOR
+         try:
+             elem = TIME_FORMAT_WITH_FRAGMENT.match(timestr)
+         except Exception, exc:
+-            print >> sys.stderr, "Exception: %s on %s" % (exc, timestr)
++            print("Exception: %s on %s" % (exc, timestr), file=sys.stderr)
+             raise
+         then = time.strptime(elem.groups()[0] + "Z", TIME_FORMAT)
+ 
+--- python-pysaml2-2.0.0.orig/tests/_test_80_p11_backend.py
++++ python-pysaml2-2.0.0/tests/_test_80_p11_backend.py
+@@ -151,9 +151,9 @@ class TestPKCS11():
+                                       )
+             self.configured = True
+         except Exception, ex:
+-            print "-" * 64
++            print("-" * 64)
+             traceback.print_exc()
+-            print "-" * 64
++            print("-" * 64)
+             logging.warning("PKCS11 tests disabled: unable to initialize test token: %s" % ex)
+             raise
+ 
+@@ -176,7 +176,7 @@ class TestPKCS11():
+         env = {}
+         if self.softhsm_conf is not None:
+             env['SOFTHSM_CONF'] = self.softhsm_conf
+-            #print "env SOFTHSM_CONF=%s " % softhsm_conf +" ".join(args)
++            #print("env SOFTHSM_CONF=%s " % softhsm_conf +" ".join(args))
+         logging.debug("Environment {!r}".format(env))
+         logging.debug("Executing {!r}".format(args))
+         args = ['ls']
+@@ -197,24 +197,24 @@ class TestPKCS11():
+         os.environ['SOFTHSM_CONF'] = self.softhsm_conf
+ 
+         ass = self._assertion
+-        print ass
++        print(ass)
+         sign_ass = self.sec.sign_assertion("%s" % ass, node_id=ass.id)
+-        #print sign_ass
++        #print(sign_ass)
+         sass = saml.assertion_from_string(sign_ass)
+-        #print sass
++        #print(sass)
+         assert _eq(sass.keyswv(), ['attribute_statement', 'issue_instant',
+                                    'version', 'signature', 'id'])
+         assert sass.version == "2.0"
+         assert sass.id == "11111"
+         assert time_util.str_to_time(sass.issue_instant)
+ 
+-        print "Crypto version : %s" % (self.sec.crypto.version())
++        print("Crypto version : %s" % (self.sec.crypto.version()))
+ 
+         item = self.sec.check_signature(sass, class_name(sass), sign_ass)
+ 
+         assert isinstance(item, saml.Assertion)
+ 
+-        print "Test PASSED"
++        print("Test PASSED")
+ 
+ 
+ def test_xmlsec_cryptobackend():
+--- python-pysaml2-2.0.0.orig/tests/otest_61_makemeta.py
++++ python-pysaml2-2.0.0/tests/otest_61_makemeta.py
+@@ -84,9 +84,9 @@ def test_org_1():
+         "url": [("http://example.com","en")],
+     }
+     org = metadata.do_organization_info(desc)
+-    print org
++    print(org)
+     assert isinstance(org, md.Organization)
+-    print org.keyswv()
++    print(org.keyswv())
+     assert _eq(org.keyswv(), ['organization_name',
+                 'organization_display_name','organization_url'])
+     assert len(org.organization_name) == 3
+@@ -100,7 +100,7 @@ def test_org_2():
+         "url": ("http://example.com","en"),
+     }
+     org = metadata.do_organization_info(desc)
+-    print org
++    print(org)
+     assert _eq(org.keyswv(), ['organization_name',
+                 'organization_display_name','organization_url'])
+     assert len(org.organization_name) == 3
+@@ -129,7 +129,7 @@ def test_contact_0():
+     assert _eq(contact_person[0].keyswv(), ['given_name', 'sur_name', 
+                                             'contact_type', 'telephone_number',
+                                             "email_address"])
+-    print contact_person[0]
++    print(contact_person[0])
+     person = contact_person[0]
+     assert person.contact_type == "technical"
+     assert isinstance(person.given_name, md.GivenName)
+@@ -145,7 +145,7 @@ def test_contact_0():
+ def test_do_endpoints():
+     eps = metadata.do_endpoints(SP["service"]["sp"]["endpoints"],
+                                     metadata.ENDPOINTS["sp"])
+-    print eps
++    print(eps)
+     assert _eq(eps.keys(), ["assertion_consumer_service", 
+                             "single_logout_service"])
+                             
+@@ -168,7 +168,7 @@ def test_required_attributes():
+                                 SP["service"]["sp"]["required_attributes"],
+                                 attrconverters, is_required="true")
+     assert len(ras) == len(SP["service"]["sp"]["required_attributes"])
+-    print ras[0]
++    print(ras[0])
+     assert ras[0].name == 'urn:oid:2.5.4.4'
+     assert ras[0].name_format == NAME_FORMAT_URI
+     assert ras[0].is_required == "true"
+@@ -179,7 +179,7 @@ def test_optional_attributes():
+                                 SP["service"]["sp"]["optional_attributes"],
+                                 attrconverters)
+     assert len(ras) == len(SP["service"]["sp"]["optional_attributes"])
+-    print ras[0]
++    print(ras[0])
+     assert ras[0].name == 'urn:oid:2.5.4.12'
+     assert ras[0].name_format == NAME_FORMAT_URI
+     assert ras[0].is_required == "false"
+@@ -200,7 +200,7 @@ def test_do_sp_sso_descriptor():
+     assert spsso.want_assertions_signed == "true"
+     assert len (spsso.attribute_consuming_service) == 1
+     acs = spsso.attribute_consuming_service[0]
+-    print acs.keyswv()
++    print(acs.keyswv())
+     assert _eq(acs.keyswv(), ['requested_attribute', 'service_name',
+                                  'service_description', 'index'])
+     assert acs.service_name[0].text == SP["name"]
+@@ -218,7 +218,7 @@ def test_do_sp_sso_descriptor_2():
+     spsso = metadata.do_spsso_descriptor(conf)
+ 
+     assert isinstance(spsso, md.SPSSODescriptor)
+-    print spsso.keyswv()
++    print(spsso.keyswv())
+     assert _eq(spsso.keyswv(), ['authn_requests_signed',
+                                 'attribute_consuming_service',
+                                 'single_logout_service',
+@@ -229,11 +229,11 @@ def test_do_sp_sso_descriptor_2():
+ 
+     exts = spsso.extensions.extension_elements
+     assert len(exts) == 1
+-    print exts
++    print(exts)
+     idpd = saml2.extension_element_to_element(exts[0],
+                                               idpdisc.ELEMENT_FROM_STRING,
+                                               namespace=idpdisc.NAMESPACE)
+-    print idpd
++    print(idpd)
+     assert idpd.location == "http://example.com/sp/ds"
+     assert idpd.index == "0"
+     assert idpd.binding == "urn:oasis:names:tc:SAML:profiles:SSO:idp-discovery-protocol"
+@@ -241,13 +241,13 @@ def test_do_sp_sso_descriptor_2():
+ def test_entity_description():
+     #confd = eval(open("../tests/server.config").read())
+     confd = SPConfig().load_file("server_conf")
+-    print confd.attribute_converters
++    print(confd.attribute_converters)
+     entd = metadata.entity_descriptor(confd)
+     assert entd is not None
+-    print entd.keyswv()
++    print(entd.keyswv())
+     assert _eq(entd.keyswv(), ['valid_until', 'entity_id', 'contact_person',
+                                 'spsso_descriptor', 'organization'])
+-    print entd
++    print(entd)
+     assert entd.entity_id == "urn:mace:example.com:saml:roland:sp"
+ 
+ def test_do_idp_sso_descriptor():
+@@ -261,7 +261,7 @@ def test_do_idp_sso_descriptor():
+                                 "extensions"])
+     exts = idpsso.extensions.extension_elements
+     assert len(exts) == 2
+-    print exts
++    print(exts)
+     inst = saml2.extension_element_to_element(exts[0],
+                                               shibmd.ELEMENT_FROM_STRING,
+                                               namespace=shibmd.NAMESPACE)
+--- python-pysaml2-2.0.0.orig/tests/test_00_xmldsig.py
++++ python-pysaml2-2.0.0/tests/test_00_xmldsig.py
+@@ -99,7 +99,7 @@ class TestSPKIData:
+   def testUsingTestData(self):
+     """Test for spki_data_from_string() using test data"""
+     new_spki_data = ds.spki_data_from_string(ds_data.TEST_SPKI_DATA)
+-    print new_spki_data
++    print(new_spki_data)
+     assert new_spki_data.spki_sexp[0].text.strip() == "spki sexp"
+     assert new_spki_data.spki_sexp[1].text.strip() == "spki sexp2"
+ 
+@@ -161,7 +161,7 @@ class TestX509Data:
+   def testAccessors(self):
+     """Test for X509Data accessors"""
+     st = ds.x509_issuer_serial_from_string(ds_data.TEST_X509_ISSUER_SERIAL)
+-    print st
++    print(st)
+     self.x509_data.x509_issuer_serial= st
+     self.x509_data.x509_ski = ds.X509SKI(text="x509 ski")
+     self.x509_data.x509_subject_name = ds.X509SubjectName(
+@@ -171,8 +171,8 @@ class TestX509Data:
+     self.x509_data.x509_crl = ds.X509CRL(text="x509 crl")
+     
+     new_x509_data = ds.x509_data_from_string(self.x509_data.to_string())
+-    print new_x509_data.keyswv()
+-    print new_x509_data.__dict__.keys()
++    print(new_x509_data.keyswv())
++    print(new_x509_data.__dict__.keys())
+     assert new_x509_data.x509_issuer_serial
+     assert isinstance(new_x509_data.x509_issuer_serial, ds.X509IssuerSerial)
+     assert new_x509_data.x509_ski.text.strip() == "x509 ski"
+--- python-pysaml2-2.0.0.orig/tests/test_01_xmlenc.py
++++ python-pysaml2-2.0.0/tests/test_01_xmlenc.py
+@@ -45,7 +45,7 @@ data2 = """<?xml version='1.0' encoding=
+ def test_2():
+     ed = xenc.encrypted_data_from_string(data2)
+     assert ed
+-    print ed
++    print(ed)
+     assert ed.type == "http://www.w3.org/2001/04/xmlenc#Element"
+     assert ed.encryption_method is not None
+     em = ed.encryption_method
+@@ -76,7 +76,7 @@ data3 = """<?xml version='1.0' encoding=
+ def test_3():
+     ed = xenc.encrypted_data_from_string(data3)
+     assert ed
+-    print ed
++    print(ed)
+     assert ed.encryption_method != None
+     em = ed.encryption_method
+     assert em.algorithm == 'http://www.w3.org/2001/04/xmlenc#aes128-cbc'
+@@ -126,7 +126,7 @@ data4 = """<?xml version='1.0' encoding=
+ def test_4():
+     ek = xenc.encrypted_key_from_string(data4)
+     assert ek
+-    print ek
++    print(ek)
+     assert ek.encryption_method != None
+     em = ek.encryption_method
+     assert em.algorithm == 'http://www.w3.org/2001/04/xmlenc#rsa-1_5'
+@@ -159,8 +159,8 @@ data5 = """<CipherReference URI="http://
+ def test_5():
+     cr = xenc.cipher_reference_from_string(data5)
+     assert cr
+-    print cr
+-    print cr.keyswv()
++    print(cr)
++    print(cr.keyswv())
+     trs = cr.transforms
+     assert len(trs.transform) == 2
+     tr = trs.transform[0]
+@@ -189,7 +189,7 @@ data6 = """<ReferenceList xmlns="http://
+ def test_6():
+     rl = xenc.reference_list_from_string(data6)
+     assert rl
+-    print rl
++    print(rl)
+     assert len(rl.data_reference) == 1
+     dr = rl.data_reference[0]
+     assert dr.uri == "#invoice34"
+--- python-pysaml2-2.0.0.orig/tests/test_02_saml.py
++++ python-pysaml2-2.0.0/tests/test_02_saml.py
+@@ -52,7 +52,7 @@ class TestExtensionElement:
+         ee.loadd(ava)
+ 
+         del ava["tag"]
+-        print ava
++        print(ava)
+         ee = saml2.ExtensionElement("")
+ 
+         raises(KeyError, "ee.loadd(ava)")
+@@ -156,7 +156,7 @@ class TestExtensionContainer:
+                 }]
+ 
+         ees = [saml2.ExtensionElement("").loadd(a) for a in avas]
+-        print ees
++        print(ees)
+         ec = saml2.ExtensionContainer(extension_elements=ees)
+         esl = ec.find_extensions(tag="tag2")
+         assert len(esl) == 1
+@@ -207,7 +207,7 @@ class TestSAMLBase:
+         }
+ 
+         foo = saml2.make_vals(ava, Issuer, part=True)
+-        print foo
++        print(foo)
+         assert foo.format == NAMEID_FORMAT_EMAILADDRESS
+         assert foo.sp_name_qualifier == "loa"
+         assert foo.text == "free text"
+@@ -216,7 +216,7 @@ class TestSAMLBase:
+         ava = "free text"
+ 
+         foo = saml2.make_vals(ava, Issuer, part=True)
+-        print foo
++        print(foo)
+         assert foo.keyswv() == ["text"]
+         assert foo.text == "free text"
+ 
+@@ -236,8 +236,8 @@ class TestSAMLBase:
+         txt = foo.to_string()
+         nsstr = foo.to_string({"saml": saml.NAMESPACE})
+         assert nsstr != txt
+-        print txt
+-        print nsstr
++        print(txt)
++        print(nsstr)
+         assert "saml:AttributeValue" in nsstr
+         assert "saml:AttributeValue" not in txt
+ 
+@@ -689,28 +689,28 @@ class TestAttribute:
+ 
+     def test_basic_str(self):
+         attribute = saml.attribute_from_string(BASIC_STR_AV)
+-        print attribute
++        print(attribute)
+         assert attribute.attribute_value[0].text.strip() == "By-Tor"
+ 
+     def test_basic_int(self):
+         attribute = saml.attribute_from_string(BASIC_INT_AV)
+-        print attribute
++        print(attribute)
+         assert attribute.attribute_value[0].text == "23"
+ 
+     def test_basic_base64(self):
+         attribute = saml.attribute_from_string(BASIC_BASE64_AV)
+-        print attribute
++        print(attribute)
+         assert attribute.attribute_value[0].text == "VU5JTkVUVA=="
+         assert attribute.attribute_value[0].get_type() == "xs:base64Binary"
+ 
+     def test_basic_boolean_true(self):
+         attribute = saml.attribute_from_string(BASIC_BOOLEAN_TRUE_AV)
+-        print attribute
++        print(attribute)
+         assert attribute.attribute_value[0].text.lower() == "true"
+ 
+     def test_basic_boolean_false(self):
+         attribute = saml.attribute_from_string(BASIC_BOOLEAN_FALSE_AV)
+-        print attribute
++        print(attribute)
+         assert attribute.attribute_value[0].text.lower() == "false"
+ 
+ 
+@@ -1102,7 +1102,7 @@ class TestEvidence:
+         self.evidence.assertion.append(saml.Assertion())
+         self.evidence.encrypted_assertion.append(saml.EncryptedAssertion())
+         new_evidence = saml.evidence_from_string(self.evidence.to_string())
+-        print new_evidence
++        print(new_evidence)
+         assert self.evidence.to_string() == new_evidence.to_string()
+         assert isinstance(new_evidence.assertion_id_ref[0],
+                           saml.AssertionIDRef)
+--- python-pysaml2-2.0.0.orig/tests/test_03_saml2.py
++++ python-pysaml2-2.0.0/tests/test_03_saml2.py
+@@ -170,7 +170,7 @@ def test_ee_1():
+     ee = saml2.extension_element_from_string(
+         """<?xml version='1.0' encoding='UTF-8'?><foo>bar</foo>""")
+     assert ee != None
+-    print ee.__dict__
++    print(ee.__dict__)
+     assert ee.attributes == {}
+     assert ee.tag == "foo"
+     assert ee.namespace == None
+@@ -182,7 +182,7 @@ def test_ee_2():
+     ee = saml2.extension_element_from_string(
+         """<?xml version='1.0' encoding='UTF-8'?><foo id="xyz">bar</foo>""")
+     assert ee != None
+-    print ee.__dict__
++    print(ee.__dict__)
+     assert ee.attributes == {"id": "xyz"}
+     assert ee.tag == "foo"
+     assert ee.namespace == None
+@@ -196,7 +196,7 @@ def test_ee_3():
+         <foo xmlns="urn:mace:example.com:saml:ns" 
+         id="xyz">bar</foo>""")
+     assert ee != None
+-    print ee.__dict__
++    print(ee.__dict__)
+     assert ee.attributes == {"id": "xyz"}
+     assert ee.tag == "foo"
+     assert ee.namespace == "urn:mace:example.com:saml:ns"
+@@ -210,7 +210,7 @@ def test_ee_4():
+         <foo xmlns="urn:mace:example.com:saml:ns">
+         <id>xyz</id><bar>tre</bar></foo>""")
+     assert ee != None
+-    print ee.__dict__
++    print(ee.__dict__)
+     assert ee.attributes == {}
+     assert ee.tag == "foo"
+     assert ee.namespace == "urn:mace:example.com:saml:ns"
+@@ -221,7 +221,7 @@ def test_ee_4():
+     ids = ee.find_children("id", "urn:mace:example.com:saml:ns")
+     assert ids != []
+     cid = ids[0]
+-    print cid.__dict__
++    print(cid.__dict__)
+     assert cid.attributes == {}
+     assert cid.tag == "id"
+     assert cid.namespace == "urn:mace:example.com:saml:ns"
+@@ -241,7 +241,7 @@ def test_ee_5():
+     ee.children.append(ce)
+ 
+     assert ee != None
+-    print ee.__dict__
++    print(ee.__dict__)
+     assert ee.attributes == {}
+     assert ee.tag == "foo"
+     assert ee.namespace == "urn:mace:example.com:saml:ns"
+@@ -249,7 +249,7 @@ def test_ee_5():
+     assert ee.text.strip() == "bar"
+ 
+     c = ee.children[0]
+-    print c.__dict__
++    print(c.__dict__)
+ 
+     child = ee.find_children(namespace="urn:mace:example.com:saml:cu")
+     assert len(child) == 1
+@@ -259,7 +259,7 @@ def test_ee_5():
+     assert len(child) == 1
+     child = ee.find_children("edugain", "urn:mace:example.com:saml:cu")
+     assert len(child) == 0
+-    print ee.to_string()
++    print(ee.to_string())
+ 
+ 
+ def test_ee_6():
+@@ -277,7 +277,7 @@ def test_ee_6():
+     pee = saml2._extension_element_from_element_tree(et)
+ 
+     assert pee != None
+-    print pee.__dict__
++    print(pee.__dict__)
+     assert pee.attributes == {}
+     assert pee.tag == "foo"
+     assert pee.namespace == "urn:mace:example.com:saml:ns"
+@@ -285,7 +285,7 @@ def test_ee_6():
+     assert pee.text.strip() == "bar"
+ 
+     c = pee.children[0]
+-    print c.__dict__
++    print(c.__dict__)
+ 
+     child = pee.find_children(namespace="urn:mace:example.com:saml:cu")
+     assert len(child) == 1
+@@ -295,7 +295,7 @@ def test_ee_6():
+     assert len(child) == 1
+     child = pee.find_children("edugain", "urn:mace:example.com:saml:cu")
+     assert len(child) == 0
+-    print pee.to_string()
++    print(pee.to_string())
+ 
+ 
+ NAMEID_WITH_ATTRIBUTE_EXTENSION = """<?xml version="1.0" encoding="utf-8"?>
+@@ -312,7 +312,7 @@ NAMEID_WITH_ATTRIBUTE_EXTENSION = """<?x
+ def test_nameid_with_extension():
+     kl = create_class_from_xml_string(NameID, NAMEID_WITH_ATTRIBUTE_EXTENSION)
+     assert kl != None
+-    print kl.__dict__
++    print(kl.__dict__)
+     assert kl.format == "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+     assert kl.sp_provided_id == "sp provided id"
+     assert kl.text.strip() == "roland@example.com"
+@@ -346,7 +346,7 @@ def test_subject_confirmation_with_exten
+     kl = create_class_from_xml_string(SubjectConfirmation,
+                                       SUBJECT_CONFIRMATION_WITH_MEMBER_EXTENSION)
+     assert kl != None
+-    print kl.__dict__
++    print(kl.__dict__)
+     assert kl.extension_attributes == {}
+     assert kl.method == "urn:oasis:names:tc:SAML:2.0:cm:bearer"
+     name_id = kl.name_id
+@@ -376,8 +376,8 @@ def test_to_fro_string_1():
+     txt = kl.to_string()
+     cpy = create_class_from_xml_string(SubjectConfirmation, txt)
+ 
+-    print kl.__dict__
+-    print cpy.__dict__
++    print(kl.__dict__)
++    print(cpy.__dict__)
+ 
+     assert kl.text.strip() == cpy.text.strip()
+     assert _eq(kl.keyswv(), cpy.keyswv())
+@@ -405,7 +405,7 @@ def test_make_vals_list_of_strs():
+ def test_attribute_element_to_extension_element():
+     attr = create_class_from_xml_string(Attribute, saml2_data.TEST_ATTRIBUTE)
+     ee = saml2.element_to_extension_element(attr)
+-    print ee.__dict__
++    print(ee.__dict__)
+     assert ee.tag == "Attribute"
+     assert ee.namespace == 'urn:oasis:names:tc:SAML:2.0:assertion'
+     assert _eq(ee.attributes.keys(), ['FriendlyName', 'Name', 'NameFormat'])
+@@ -436,7 +436,7 @@ def test_ee_7():
+    </ExternalEntityAttributeAuthority>
+ """)
+ 
+-    print ee.__dict__
++    print(ee.__dict__)
+     assert len(ee.children) == 2
+     for child in ee.children:
+         assert child.namespace == "urn:oasis:names:tc:SAML:metadata:dynamicsaml"
+@@ -479,7 +479,7 @@ def test_extension_element_loadd():
+     }
+ 
+     ee = saml2.ExtensionElement(ava["tag"]).loadd(ava)
+-    print ee.__dict__
++    print(ee.__dict__)
+     assert len(ee.children) == 2
+     for child in ee.children:
+         assert child.namespace == "urn:oasis:names:tc:SAML:metadata:dynamicsaml"
+@@ -529,7 +529,7 @@ def test_extensions_loadd():
+     extension = saml2.SamlBase()
+     extension.loadd(ava)
+ 
+-    print extension.__dict__
++    print(extension.__dict__)
+     assert len(extension.extension_elements) == 1
+     ee = extension.extension_elements[0]
+     assert len(ee.children) == 2
+--- python-pysaml2-2.0.0.orig/tests/test_04_samlp.py
++++ python-pysaml2-2.0.0/tests/test_04_samlp.py
+@@ -96,7 +96,7 @@ class TestStatusCode:
+         self.status_code.value = samlp.STATUS_RESPONDER
+         self.status_code.status_code = samlp.StatusCode(
+             value=samlp.STATUS_REQUEST_DENIED)
+-        print self.status_code.__dict__
++        print(self.status_code.__dict__)
+         new_status_code = samlp.status_code_from_string(self.status_code.to_string())
+         assert new_status_code.value == samlp.STATUS_RESPONDER
+         assert new_status_code.status_code.value == \
+--- python-pysaml2-2.0.0.orig/tests/test_05_md.py
++++ python-pysaml2-2.0.0/tests/test_05_md.py
+@@ -47,7 +47,7 @@ class TestEndpointType:
+     self.endpoint.binding = saml2.BINDING_HTTP_POST
+     self.endpoint.location = "http://www.example.com/endpoint"
+     self.endpoint.response_location = "http://www.example.com/response"
+-    print self.endpoint.__class__.c_attributes.items()
++    print(self.endpoint.__class__.c_attributes.items())
+     new_endpoint = md.endpoint_type__from_string(self.endpoint.to_string())
+     assert new_endpoint.binding == saml2.BINDING_HTTP_POST
+     assert new_endpoint.location == "http://www.example.com/endpoint"
+@@ -125,7 +125,7 @@ class TestOrganizationName:
+     """Test for organization_name_from_string() using test data."""
+     new_organization_name = md.organization_name_from_string(
+       md_data.TEST_ORGANIZATION_NAME)
+-    print new_organization_name.keyswv()
++    print(new_organization_name.keyswv())
+     assert new_organization_name.lang == "se"
+     assert new_organization_name.text.strip() == "Catalogix"
+ 
+@@ -161,7 +161,7 @@ class TestOrganizationURL:
+     """Test for OrganizationURL accessors"""
+     self.organization_url.lang = "ja"
+     self.organization_url.text = "http://www.example.com/"
+-    print self.organization_url.to_string()
++    print(self.organization_url.to_string())
+     new_organization_url = md.organization_url_from_string(
+       self.organization_url.to_string())
+     assert new_organization_url.lang == "ja"
+@@ -967,10 +967,10 @@ class TestSPSSODescriptor:
+     self.sp_sso_descriptor.attribute_consuming_service.append(
+       md.AttributeConsumingService())
+ 
+-    print self.sp_sso_descriptor
++    print(self.sp_sso_descriptor)
+     new_sp_sso_descriptor = md.spsso_descriptor_from_string(
+       self.sp_sso_descriptor.to_string())
+-    print new_sp_sso_descriptor
++    print(new_sp_sso_descriptor)
+     assert new_sp_sso_descriptor.id == "ID"
+     assert new_sp_sso_descriptor.valid_until == "2008-09-14T01:05:02Z"
+     assert new_sp_sso_descriptor.cache_duration == "10:00:00:00"
+@@ -1013,13 +1013,13 @@ class TestSPSSODescriptor:
+     assert new_sp_sso_descriptor.error_url == "http://www.example.com/errorURL"
+     assert isinstance(new_sp_sso_descriptor.signature, ds.Signature)
+     assert isinstance(new_sp_sso_descriptor.extensions, md.Extensions)
+-    print new_sp_sso_descriptor.extensions.__dict__
++    print(new_sp_sso_descriptor.extensions.__dict__)
+     assert len(new_sp_sso_descriptor.extensions.extension_elements) == 2
+     for eelem in new_sp_sso_descriptor.extensions.extension_elements:
+-        print "EE",eelem.__dict__
++        print("EE",eelem.__dict__)
+         dp = extension_element_to_element(eelem, idpdisc.ELEMENT_FROM_STRING,
+                                             idpdisc.NAMESPACE)
+-        print "DP",dp.c_tag, dp.c_namespace,dp.__dict__
++        print("DP",dp.c_tag, dp.c_namespace,dp.__dict__)
+         assert isinstance(dp, idpdisc.DiscoveryResponse)
+     assert isinstance(new_sp_sso_descriptor.key_descriptor[0],
+                             md.KeyDescriptor)
+--- python-pysaml2-2.0.0.orig/tests/test_12_s_utils.py
++++ python-pysaml2-2.0.0/tests/test_12_s_utils.py
+@@ -33,13 +33,13 @@ def _eq(l1,l2):
+ 
+ def _oeq(l1,l2):
+     if len(l1) != len(l2):
+-        print "Different number of items"
++        print("Different number of items")
+         return False
+     for item in l1:
+         if item not in l2:
+-            print "%s not in l2" % (item,)
++            print("%s not in l2" % (item,))
+             for ite in l2:
+-                print "\t%s" % (ite,)
++                print("\t%s" % (ite,))
+             return False
+     return True
+     
+@@ -64,20 +64,20 @@ def test_error_status():
+                                         samlp.STATUS_RESPONDER)
+         
+     status_text = "%s" % status
+-    print status_text
++    print(status_text)
+     assert status_text == ERROR_STATUS
+ 
+ def test_status_from_exception():
+     e = utils.UnknownPrincipal("Error resolving principal")
+     stat = utils.error_status_factory(e)
+     status_text = "%s" % stat
+-    print status_text
++    print(status_text)
+     assert status_text == ERROR_STATUS
+     
+ def test_attribute_sn():
+     attr = utils.do_attributes({"surName":("Jeter", "")})
+     assert len(attr) == 1
+-    print attr
++    print(attr)
+     inst = attr[0]
+     assert inst.name == "surName"
+     assert len(inst.attribute_value) == 1
+@@ -89,7 +89,7 @@ def test_attribute_age():
+     
+     assert len(attr) == 1
+     inst = attr[0]
+-    print inst
++    print(inst)
+     assert inst.name == "age"
+     assert len(inst.attribute_value) == 1
+     av = inst.attribute_value[0]
+@@ -101,7 +101,7 @@ def test_attribute_onoff():
+     
+     assert len(attr) == 1
+     inst = attr[0]
+-    print inst
++    print(inst)
+     assert inst.name == "onoff"
+     assert len(inst.attribute_value) == 1
+     av = inst.attribute_value[0]
+@@ -114,7 +114,7 @@ def test_attribute_base64():
+     
+     assert len(attr) == 1
+     inst = attr[0]
+-    print inst
++    print(inst)
+     assert inst.name == "name"
+     assert len(inst.attribute_value) == 1
+     av = inst.attribute_value[0]
+@@ -124,7 +124,7 @@ def test_attribute_base64():
+ def test_attribute_statement():
+     statement = do_attribute_statement({"surName":("Jeter", ""),
+                                         "givenName":("Derek", "")})
+-    print statement
++    print(statement)
+     assert statement.keyswv() == ["attribute"]
+     assert len(statement.attribute) == 2
+     attr0 = statement.attribute[0]
+@@ -279,7 +279,7 @@ def test_parse_attribute_map():
+     
+     assert _eq(forward.keys(), backward.values())
+     assert _eq(forward.values(), backward.keys())
+-    print forward.keys()
++    print(forward.keys())
+     assert _oeq(forward.keys(), [
+             ('urn:oid:1.3.6.1.4.1.5923.1.1.1.7', NAME_FORMAT_URI), 
+             ('urn:oid:0.9.2342.19200300.100.1.1', NAME_FORMAT_URI), 
+--- python-pysaml2-2.0.0.orig/tests/test_19_attribute_converter.py
++++ python-pysaml2-2.0.0/tests/test_19_attribute_converter.py
+@@ -28,13 +28,13 @@ class TestAC():
+         self.acs = attribute_converter.ac_factory(full_path("attributemaps"))
+         
+     def test_setup(self):
+-        print self.acs
++        print(self.acs)
+         assert len(self.acs) == 3
+         assert _eq([a.name_format for a in self.acs],[BASIC_NF, URI_NF, SAML1] )
+ 
+     def test_ava_fro_1(self):
+         ats = saml.attribute_statement_from_string(STATEMENT1)
+-        #print ats
++        #print(ats)
+         ava = None
+ 
+         for ac in self.acs:
+@@ -45,7 +45,7 @@ class TestAC():
+             # break if we have something
+             if ava:
+                 break
+-        print ava.keys()
++        print(ava.keys())
+         assert _eq(ava.keys(), ['givenName', 'displayName', 'uid',
+                                 'eduPersonNickname', 'street',
+                                 'eduPersonScopedAffiliation',
+@@ -56,12 +56,12 @@ class TestAC():
+ 
+     def test_ava_fro_2(self):
+         ats = saml.attribute_statement_from_string(STATEMENT2)
+-        #print ats
++        #print(ats)
+         ava = {}
+         for ac in self.acs:
+             ava.update(ac.fro(ats))
+ 
+-        print ava.keys()
++        print(ava.keys())
+         assert _eq(ava.keys(), ['eduPersonEntitlement', 'eduPersonAffiliation',
+                                 'uid', 'mail', 'givenName', 'sn'])
+ 
+@@ -146,7 +146,7 @@ class TestAC():
+     #
+     #     result = attribute_converter.ava_fro(self.acs, attr)
+     #
+-    #     print result
++    #     print(result)
+     #     assert result == {'givenName': [], 'sn': [], 'title': []}
+ 
+     def test_to_local_name_from_basic(self):
+@@ -194,7 +194,7 @@ def test_noop_attribute_conversion():
+     aconv = AttributeConverterNOOP(URI_NF)
+     res = aconv.to_(ava)
+ 
+-    print res
++    print(res)
+     assert len(res) == 2
+     for attr in res:
+         assert len(attr.attribute_value) == 1
+--- python-pysaml2-2.0.0.orig/tests/test_20_assertion.py
++++ python-pysaml2-2.0.0/tests/test_20_assertion.py
+@@ -195,7 +195,7 @@ def test_filter_attribute_value_assertio
+     ava = filter_attribute_value_assertions(AVA[3].copy(),
+                                             p.get_attribute_restrictions(""))
+ 
+-    print ava
++    print(ava)
+     assert ava.keys() == ["surName"]
+     assert ava["surName"] == ["Hedberg"]
+ 
+@@ -213,7 +213,7 @@ def test_filter_attribute_value_assertio
+     ava = filter_attribute_value_assertions(AVA[0].copy(),
+                                             p.get_attribute_restrictions(""))
+ 
+-    print ava
++    print(ava)
+     assert _eq(ava.keys(), ["givenName", "surName"])
+     assert ava["surName"] == ["Jeter"]
+     assert ava["givenName"] == ["Derek"]
+@@ -221,7 +221,7 @@ def test_filter_attribute_value_assertio
+     ava = filter_attribute_value_assertions(AVA[1].copy(),
+                                             p.get_attribute_restrictions(""))
+ 
+-    print ava
++    print(ava)
+     assert _eq(ava.keys(), ["surName"])
+     assert ava["surName"] == ["Howard"]
+ 
+@@ -238,20 +238,20 @@ def test_filter_attribute_value_assertio
+     ava = filter_attribute_value_assertions(AVA[0].copy(),
+                                             p.get_attribute_restrictions(""))
+ 
+-    print ava
++    print(ava)
+     assert _eq(ava.keys(), [])
+ 
+     ava = filter_attribute_value_assertions(AVA[1].copy(),
+                                             p.get_attribute_restrictions(""))
+ 
+-    print ava
++    print(ava)
+     assert _eq(ava.keys(), ["givenName"])
+     assert ava["givenName"] == ["Ryan"]
+ 
+     ava = filter_attribute_value_assertions(AVA[3].copy(),
+                                             p.get_attribute_restrictions(""))
+ 
+-    print ava
++    print(ava)
+     assert _eq(ava.keys(), ["givenName"])
+     assert ava["givenName"] == ["Roland"]
+ 
+@@ -261,8 +261,8 @@ def test_filter_attribute_value_assertio
+ def test_assertion_1(AVA):
+     ava = Assertion(AVA[0])
+ 
+-    print ava
+-    print ava.__dict__
++    print(ava)
++    print(ava.__dict__)
+ 
+     policy = Policy({
+         "default": {
+@@ -274,7 +274,7 @@ def test_assertion_1(AVA):
+ 
+     ava = ava.apply_policy("", policy)
+ 
+-    print ava
++    print(ava)
+     assert _eq(ava.keys(), [])
+ 
+     ava = Assertion(AVA[1].copy())
+@@ -481,7 +481,7 @@ def test_filter_values_req_opt_4():
+            "eduPersonAffiliation": ["staff"], "uid": ["rohe0002"]}
+ 
+     ava = assertion.filter_on_demands(ava, rava, oava)
+-    print ava
++    print(ava)
+     assert _eq(ava.keys(), ['givenName', 'sn'])
+     assert ava == {'givenName': ['Roland'], 'sn': ['Hedberg']}
+ 
+@@ -722,7 +722,7 @@ def test_assertion_with_noop_attribute_c
+                         policy, issuer=issuer, authn_decl=ACD ,
+                         authn_auth="authn_authn")
+ 
+-    print msg
++    print(msg)
+     for attr in msg.attribute_statement[0].attribute:
+         assert attr.name_format == NAME_FORMAT_URI
+         assert len(attr.attribute_value) == 1
+@@ -770,7 +770,7 @@ def test_assertion_with_zero_attributes(
+                         policy, issuer=issuer, authn_decl=ACD ,
+                         authn_auth="authn_authn")
+ 
+-    print msg
++    print(msg)
+     assert msg.attribute_statement == []
+ 
+ 
+@@ -792,7 +792,7 @@ def test_assertion_with_authn_instant():
+                         authn_auth="authn_authn",
+                         authn_instant=1234567890)
+ 
+-    print msg
++    print(msg)
+     assert msg.authn_statement[0].authn_instant == "2009-02-13T23:31:30Z"
+ 
+ 
+--- python-pysaml2-2.0.0.orig/tests/test_22_mdie.py
++++ python-pysaml2-2.0.0/tests/test_22_mdie.py
+@@ -43,7 +43,7 @@ def test_construct_contact():
+                           "__class__": _class(md.EmailAddress)}],
+     }, ONTS)
+ 
+-    print c
++    print(c)
+     assert c.given_name.text == "Roland"
+     assert c.sur_name.text == "Hedberg"
+     assert c.email_address[0].text == "roland@catalogix.se"
+--- python-pysaml2-2.0.0.orig/tests/test_30_mdstore.py
++++ python-pysaml2-2.0.0/tests/test_30_mdstore.py
+@@ -125,10 +125,10 @@ def test_incommon_1():
+ 
+     mds.imp(METADATACONF["2"])
+ 
+-    print mds.entities()
++    print(mds.entities())
+     assert mds.entities() > 1700
+     idps = mds.with_descriptor("idpsso")
+-    print idps.keys()
++    print(idps.keys())
+     assert len(idps) > 300  # ~ 18%
+     try:
+         _ = mds.single_sign_on_service('urn:mace:incommon:uiuc.edu')
+@@ -137,7 +137,7 @@ def test_incommon_1():
+ 
+     idpsso = mds.single_sign_on_service('urn:mace:incommon:alaska.edu')
+     assert len(idpsso) == 1
+-    print idpsso
++    print(idpsso)
+     assert destinations(idpsso) == [
+         'https://idp.alaska.edu/idp/profile/SAML2/Redirect/SSO']
+ 
+@@ -153,7 +153,7 @@ def test_incommon_1():
+     # Look for attribute authorities
+     aas = mds.with_descriptor("attribute_authority")
+ 
+-    print aas.keys()
++    print(aas.keys())
+     assert len(aas) == 180
+ 
+ 
+@@ -193,24 +193,24 @@ def test_switch_1():
+     mds.imp(METADATACONF["5"])
+     assert len(mds.keys()) > 160
+     idps = mds.with_descriptor("idpsso")
+-    print idps.keys()
++    print(idps.keys())
+     idpsso = mds.single_sign_on_service(
+         'https://aai-demo-idp.switch.ch/idp/shibboleth')
+     assert len(idpsso) == 1
+-    print idpsso
++    print(idpsso)
+     assert destinations(idpsso) == [
+         'https://aai-demo-idp.switch.ch/idp/profile/SAML2/Redirect/SSO']
+     assert len(idps) > 30
+     aas = mds.with_descriptor("attribute_authority")
+-    print aas.keys()
++    print(aas.keys())
+     aad = aas['https://aai-demo-idp.switch.ch/idp/shibboleth']
+-    print aad.keys()
++    print(aad.keys())
+     assert len(aad["attribute_authority_descriptor"]) == 1
+     assert len(aad["idpsso_descriptor"]) == 1
+ 
+     sps = mds.with_descriptor("spsso")
+     dual = [eid for eid, ent in idps.items() if eid in sps]
+-    print len(dual)
++    print(len(dual))
+     assert len(dual) == 0
+ 
+ 
+@@ -220,7 +220,7 @@ def test_metadata_file():
+                         disable_ssl_certificate_validation=True)
+ 
+     mds.imp(METADATACONF["8"])
+-    print len(mds.keys())
++    print(len(mds.keys()))
+     assert len(mds.keys()) == 560
+ 
+ if __name__ == "__main__":
+--- python-pysaml2-2.0.0.orig/tests/test_31_config.py
++++ python-pysaml2-2.0.0/tests/test_31_config.py
+@@ -171,7 +171,7 @@ def _eq(l1, l2):
+ def test_1():
+     c = SPConfig().load(sp1)
+     c.context = "sp"
+-    print c
++    print(c)
+     assert c._sp_endpoints
+     assert c._sp_name
+     assert c._sp_idp
+@@ -192,7 +192,7 @@ def test_2():
+     c = SPConfig().load(sp2)
+     c.context = "sp"
+ 
+-    print c
++    print(c)
+     assert c._sp_endpoints
+     assert c.getattr("endpoints", "sp")
+     assert c._sp_idp
+@@ -234,7 +234,7 @@ def test_idp_1():
+     c = IdPConfig().load(IDP1)
+     c.context = "idp"
+ 
+-    print c
++    print(c)
+     assert c.endpoint("single_sign_on_service")[0] == 'http://localhost:8088/'
+ 
+     attribute_restrictions = c.getattr("policy",
+@@ -246,7 +246,7 @@ def test_idp_2():
+     c = IdPConfig().load(IDP2)
+     c.context = "idp"
+ 
+-    print c
++    print(c)
+     assert c.endpoint("single_logout_service",
+                       BINDING_SOAP) == []
+     assert c.endpoint("single_logout_service",
+@@ -292,7 +292,7 @@ def test_conf_syslog():
+     root_logger.level = logging.NOTSET
+     root_logger.handlers = []
+ 
+-    print c.logger
++    print(c.logger)
+     c.setup_logger()
+ 
+     assert root_logger.level != logging.NOTSET
+@@ -301,7 +301,7 @@ def test_conf_syslog():
+     assert isinstance(root_logger.handlers[0],
+                       logging.handlers.SysLogHandler)
+     handler = root_logger.handlers[0]
+-    print handler.__dict__
++    print(handler.__dict__)
+     assert handler.facility == "local3"
+     assert handler.address == ('localhost', 514)
+     if sys.version >= (2, 7):
+--- python-pysaml2-2.0.0.orig/tests/test_33_identifier.py
++++ python-pysaml2-2.0.0/tests/test_33_identifier.py
+@@ -110,12 +110,12 @@ class TestIdentifier():
+         })
+         
+         name_id_policy = samlp.name_id_policy_from_string(NAME_ID_POLICY_1)
+-        print name_id_policy
++        print(name_id_policy)
+         nameid = self.id.construct_nameid("foobar", policy,
+                                           'http://vo.example.org/biomed',
+                                           name_id_policy)
+ 
+-        print nameid
++        print(nameid)
+         assert _eq(nameid.keyswv(), ['text', 'sp_name_qualifier', 'format',
+                                      'name_qualifier'])
+         assert nameid.sp_name_qualifier == 'http://vo.example.org/biomed'
+@@ -151,7 +151,7 @@ class TestIdentifier():
+         sp_id = "urn:mace:umu.se:sp"
+         nameid = self.id.persistent_nameid("abcd0001", sp_id)
+         remote_id = nameid.text.strip()
+-        print remote_id
++        print(remote_id)
+         local = self.id.find_local_id(nameid)
+         assert local == "abcd0001"
+ 
+@@ -163,7 +163,7 @@ class TestIdentifier():
+         sp_id = "urn:mace:umu.se:sp"
+         nameid = self.id.transient_nameid("abcd0001", sp_id)
+         remote_id = nameid.text.strip()
+-        print remote_id
++        print(remote_id)
+         local = self.id.find_local_id(nameid)
+         assert local == "abcd0001"
+ 
+--- python-pysaml2-2.0.0.orig/tests/test_36_mdbcache.py
++++ python-pysaml2-2.0.0/tests/test_36_mdbcache.py
+@@ -30,7 +30,7 @@ class TestMongoDBCache():
+             info = self.cache.get("1234", "abcd")
+             #{u'issuer': u'', u'came from': u'', u'ava': {u'givenName': [u'Derek']}, u'session_id': -1, u'not_on_or_after': 0}
+             ava = info["ava"]
+-            print ava
++            print(ava)
+             assert ava.keys() == ["givenName"]
+             assert ava["givenName"] == ["Derek"]
+ 
+@@ -53,7 +53,7 @@ class TestMongoDBCache():
+             self.cache.delete("1234")
+ 
+             info = self.cache.get("1234", "abcd")
+-            print info
++            print(info)
+             assert info == {}
+ 
+     def test_subjects(self):
+@@ -75,7 +75,7 @@ class TestMongoDBCache():
+             self.cache.set("1234", "xyzv", session_info, not_on_or_after)
+ 
+             (ident, _) = self.cache.get_identity("1234")
+-            print ident
++            print(ident)
+             assert len(ident.keys()) == 2
+             assert "givenName" in ident.keys()
+             assert "mail" in ident.keys()
+@@ -87,5 +87,5 @@ class TestMongoDBCache():
+             self.cache.delete("1234")
+ 
+             info = self.cache.get("1234", "xyzv")
+-            print info
++            print(info)
+             assert info == {}
+--- python-pysaml2-2.0.0.orig/tests/test_37_entity_categories.py
++++ python-pysaml2-2.0.0/tests/test_37_entity_categories.py
+@@ -160,7 +160,7 @@ def test_idp_policy_filter():
+     policy = idp.config.getattr("policy", "idp")
+     policy.filter(ava, "urn:mace:example.com:saml:roland:sp", idp.metadata)
+ 
+-    print ava
++    print(ava)
+     assert ava.keys() == ["eduPersonTargetedID"]  # because no entity category
+ 
+ if __name__ == "__main__":
+--- python-pysaml2-2.0.0.orig/tests/test_40_sigver.py
++++ python-pysaml2-2.0.0/tests/test_40_sigver.py
+@@ -68,7 +68,7 @@ def test_cert_from_instance_1():
+     assertion = response.assertion[0]
+     certs = sigver.cert_from_instance(assertion)
+     assert len(certs) == 1
+-    print certs[0]
++    print(certs[0])
+     assert certs[0] == CERT1
+ 
+ 
+@@ -80,7 +80,7 @@ def test_cert_from_instance_ssp():
+     assert len(certs) == 1
+     assert certs[0] == CERT_SSP
+     der = base64.b64decode(certs[0])
+-    print str(decoder.decode(der)).replace('.', "\n.")
++    print(str(decoder.decode(der)).replace('.', "\n."))
+     assert decoder.decode(der)
+ 
+ 
+@@ -149,18 +149,18 @@ class TestSecurity():
+ 
+     def test_sign_assertion(self):
+         ass = self._assertion
+-        print ass
++        print(ass)
+         sign_ass = self.sec.sign_assertion("%s" % ass, node_id=ass.id)
+-        #print sign_ass
++        #print(sign_ass)
+         sass = saml.assertion_from_string(sign_ass)
+-        #print sass
++        #print(sass)
+         assert _eq(sass.keyswv(), ['attribute_statement', 'issue_instant', 
+                                 'version', 'signature', 'id'])
+         assert sass.version == "2.0"
+         assert sass.id == "11111"
+         assert time_util.str_to_time(sass.issue_instant)
+ 
+-        print "Crypto version : %s" % (self.sec.crypto.version())
++        print("Crypto version : %s" % (self.sec.crypto.version()))
+ 
+         item = self.sec.check_signature(sass, class_name(sass), sign_ass)
+ 
+@@ -180,7 +180,7 @@ class TestSecurity():
+         assert sass.id == "11111"
+         assert time_util.str_to_time(sass.issue_instant)
+ 
+-        print "Crypto version : %s" % (self.sec.crypto.version())
++        print("Crypto version : %s" % (self.sec.crypto.version()))
+ 
+         item = self.sec.check_signature(sass, class_name(sass),
+                                         sign_ass, must=True)
+@@ -236,11 +236,11 @@ class TestSecurity():
+         s_response = sigver.signed_instance_factory(response, self.sec, to_sign)
+             
+         assert s_response is not None
+-        print s_response
++        print(s_response)
+         response = response_from_string(s_response)
+         sass = response.assertion[0]
+         
+-        print sass
++        print(sass)
+         assert _eq(sass.keyswv(), ['attribute_statement', 'issue_instant',
+                                    'version', 'signature', 'id'])
+         assert sass.version == "2.0"
+@@ -297,11 +297,11 @@ class TestSecurity():
+ 
+         s_response = sigver.signed_instance_factory(response, self.sec, to_sign)
+ 
+-        print s_response
++        print(s_response)
+         res = self.sec.verify_signature("%s" % s_response, 
+                                     node_name=class_name(samlp.Response()))
+ 
+-        print res        
++        print(res        )
+         assert res
+ 
+     def test_sign_verify_with_cert_from_instance(self):
+@@ -345,7 +345,7 @@ class TestSecurity():
+ 
+         to_sign = [(class_name(assertion), assertion.id)]
+         s_assertion = sigver.signed_instance_factory(assertion, self.sec, to_sign)
+-        print s_assertion
++        print(s_assertion)
+         ass = assertion_from_string(s_assertion)
+         ci = "".join(sigver.cert_from_instance(ass)[0].split())
+         assert ci == self.sec.my_cert
+@@ -410,18 +410,18 @@ class TestSecurityMetadata():
+ 
+     def test_sign_assertion(self):
+         ass = self._assertion
+-        print ass
++        print(ass)
+         sign_ass = self.sec.sign_assertion("%s" % ass, node_id=ass.id)
+-        #print sign_ass
++        #print(sign_ass)
+         sass = saml.assertion_from_string(sign_ass)
+-        #print sass
++        #print(sass)
+         assert _eq(sass.keyswv(), ['attribute_statement', 'issue_instant',
+                                    'version', 'signature', 'id'])
+         assert sass.version == "2.0"
+         assert sass.id == "11111"
+         assert time_util.str_to_time(sass.issue_instant)
+ 
+-        print "Crypto version : %s" % (self.sec.crypto.version())
++        print("Crypto version : %s" % (self.sec.crypto.version()))
+ 
+         item = self.sec.check_signature(sass, class_name(sass), sign_ass)
+ 
+--- python-pysaml2-2.0.0.orig/tests/test_42_enc.py
++++ python-pysaml2-2.0.0/tests/test_42_enc.py
+@@ -24,7 +24,7 @@ AUTHN = {
+ 
+ def test_pre_enc():
+     tmpl = pre_encryption_part()
+-    print tmpl
++    print(mpl)
+     assert "%s" % tmpl == TMPL
+ 
+ 
+@@ -39,7 +39,7 @@ def test_reshuffle_response():
+ 
+     resp2 = pre_encrypt_assertion(resp_)
+ 
+-    print resp2
++    print(resp2)
+     assert resp2.encrypted_assertion.extension_elements
+ 
+ 
+@@ -73,7 +73,7 @@ def test_enc1():
+     (_stdout, _stderr, output) = crypto._run_xmlsec(
+         com_list, [tmpl], exception=EncryptError, validate_output=False)
+ 
+-    print output
++    print(output)
+     assert _stderr == ""
+     assert _stdout == ""
+ 
+@@ -92,7 +92,7 @@ def test_enc2():
+     enc_resp = crypto.encrypt_assertion(resp_, "pubkey.pem",
+                                         pre_encryption_part())
+ 
+-    print enc_resp
++    print(enc_resp)
+     assert enc_resp
+ 
+ if __name__ == "__main__":
+--- python-pysaml2-2.0.0.orig/tests/test_44_authnresp.py
++++ python-pysaml2-2.0.0/tests/test_44_authnresp.py
+@@ -62,13 +62,13 @@ class TestAuthnResponse:
+     
+     def test_verify_1(self):
+         xml_response = "%s" % (self._resp_,)
+-        print xml_response
++        print(xml_response)
+         self.ar.outstanding_queries = {"id12": "http://localhost:8088/sso"}
+         self.ar.timeslack = 10000
+         self.ar.loads(xml_response, decode=False)
+         self.ar.verify()
+         
+-        print self.ar.__dict__
++        print(self.ar.__dict__)
+         assert self.ar.came_from == 'http://localhost:8088/sso'
+         assert self.ar.session_id() == "id12"
+         assert self.ar.ava["eduPersonAffiliation"] == IDENTITY["eduPersonAffiliation"]
+@@ -77,14 +77,14 @@ class TestAuthnResponse:
+     
+     def test_verify_signed_1(self):
+         xml_response = self._sign_resp_
+-        print xml_response
++        print(xml_response)
+         
+         self.ar.outstanding_queries = {"id12": "http://localhost:8088/sso"}
+         self.ar.timeslack = 10000
+         self.ar.loads(xml_response, decode=False)
+         self.ar.verify()
+         
+-        print self.ar.__dict__
++        print(self.ar.__dict__)
+         assert self.ar.came_from == 'http://localhost:8088/sso'
+         assert self.ar.session_id() == "id12"
+         assert self.ar.ava["sn"] == IDENTITY["surName"]
+@@ -102,7 +102,7 @@ class TestAuthnResponse:
+         self.ar.loads(xml_response, decode=False)
+         self.ar.verify()
+         
+-        print self.ar.__dict__
++        print(self.ar.__dict__)
+         assert self.ar.came_from == 'http://localhost:8088/foo'
+         assert self.ar.session_id() == ID
+         assert self.ar.name_id
+@@ -116,7 +116,7 @@ class TestAuthnResponse:
+         self.ar.loads(xml_response, decode=False)
+         self.ar.verify()
+ 
+-        print self.ar.assertion
++        print(self.ar.assertion)
+         assert len(self.ar.assertion.authn_statement) == 1
+         authn_info = self.ar.authn_info()
+         assert len(authn_info) == 1
+--- python-pysaml2-2.0.0.orig/tests/test_50_server.py
++++ python-pysaml2-2.0.0/tests/test_50_server.py
+@@ -110,7 +110,7 @@ class TestServer1():
+             issuer=self.server._issuer(),
+         )
+ 
+-        print response.keyswv()
++        print(response.keyswv())
+         assert _eq(response.keyswv(), ['destination', 'assertion', 'status',
+                                        'in_response_to', 'issue_instant',
+                                        'version', 'issuer', 'id'])
+@@ -120,7 +120,7 @@ class TestServer1():
+         assert response.in_response_to == "_012345"
+         #
+         status = response.status
+-        print status
++        print(status)
+         assert status.status_code.value == samlp.STATUS_SUCCESS
+ 
+     def test_parse_faulty_request(self):
+@@ -132,7 +132,7 @@ class TestServer1():
+         htargs = self.client.apply_binding(
+             binding, "%s" % authn_request, "http://www.example.com", "abcd")
+         _dict = parse_qs(htargs["headers"][0][1].split('?')[1])
+-        print _dict
++        print(_dict)
+         raises(OtherError, self.server.parse_authn_request,
+                _dict["SAMLRequest"][0], binding)
+ 
+@@ -144,17 +144,17 @@ class TestServer1():
+         htargs = self.client.apply_binding(binding, "%s" % authn_request,
+                                            "http://www.example.com", "abcd")
+         _dict = parse_qs(htargs["headers"][0][1].split('?')[1])
+-        print _dict
++        print(_dict)
+ 
+         try:
+             self.server.parse_authn_request(_dict["SAMLRequest"][0], binding)
+             status = None
+         except OtherError, oe:
+-            print oe.args
++            print(oe.args)
+             status = s_utils.error_status_factory(oe)
+ 
+         assert status
+-        print status
++        print(status)
+         assert _eq(status.keyswv(), ["status_code", "status_message"])
+         assert status.status_message.text == 'Not destined for me!'
+         status_code = status.status_code
+@@ -166,16 +166,16 @@ class TestServer1():
+         req_id, authn_request = self.client.create_authn_request(
+             message_id="id1", destination="http://localhost:8088/sso")
+ 
+-        print authn_request
++        print(authn_request)
+         binding = BINDING_HTTP_REDIRECT
+         htargs = self.client.apply_binding(binding, "%s" % authn_request,
+                                            "http://www.example.com", "abcd")
+         _dict = parse_qs(htargs["headers"][0][1].split('?')[1])
+-        print _dict
++        print(_dict)
+ 
+         req = self.server.parse_authn_request(_dict["SAMLRequest"][0], binding)
+         # returns a dictionary
+-        print req
++        print(req)
+         resp_args = self.server.response_args(req.message, [BINDING_HTTP_POST])
+         assert resp_args["destination"] == "http://lingon.catalogix.se:8087/"
+         assert resp_args["in_response_to"] == "id1"
+@@ -202,7 +202,7 @@ class TestServer1():
+             authn=AUTHN
+         )
+ 
+-        print resp.keyswv()
++        print(resp.keyswv())
+         assert _eq(resp.keyswv(), ['status', 'destination', 'assertion',
+                                    'in_response_to', 'issue_instant',
+                                    'version', 'id', 'issuer'])
+@@ -213,12 +213,12 @@ class TestServer1():
+         assert resp.assertion
+         assert resp.assertion
+         assertion = resp.assertion
+-        print assertion
++        print(assertion)
+         assert assertion.authn_statement
+         assert assertion.conditions
+         assert assertion.attribute_statement
+         attribute_statement = assertion.attribute_statement
+-        print attribute_statement
++        print(attribute_statement)
+         assert len(attribute_statement[0].attribute) == 5
+         # Pick out one attribute
+         attr = None
+@@ -235,8 +235,8 @@ class TestServer1():
+         assert assertion.subject.name_id
+         assert assertion.subject.subject_confirmation
+         confirmation = assertion.subject.subject_confirmation[0]
+-        print confirmation.keyswv()
+-        print confirmation.subject_confirmation_data
++        print(confirmation.keyswv())
++        print(confirmation.subject_confirmation_data)
+         assert confirmation.subject_confirmation_data.in_response_to == "id12"
+ 
+     def test_sso_response_without_identity(self):
+@@ -251,7 +251,7 @@ class TestServer1():
+             best_effort=True
+         )
+ 
+-        print resp.keyswv()
++        print(resp.keyswv())
+         assert _eq(resp.keyswv(), ['status', 'destination', 'in_response_to',
+                                    'issue_instant', 'version', 'id', 'issuer',
+                                    'assertion'])
+@@ -276,7 +276,7 @@ class TestServer1():
+             best_effort=True
+         )
+ 
+-        print resp.keyswv()
++        print(resp.keyswv())
+         assert _eq(resp.keyswv(), ['status', 'destination', 'in_response_to',
+                                    'issue_instant', 'version', 'id', 'issuer',
+                                    'assertion'])
+@@ -288,13 +288,13 @@ class TestServer1():
+         resp = self.server.create_error_response(
+             "id12", "http://localhost:8087/", exc)
+ 
+-        print resp.keyswv()
++        print(resp.keyswv())
+         assert _eq(resp.keyswv(), ['status', 'destination', 'in_response_to',
+                                    'issue_instant', 'version', 'id', 'issuer'])
+         assert resp.destination == "http://localhost:8087/"
+         assert resp.in_response_to == "id12"
+         assert resp.status
+-        print resp.status
++        print(resp.status)
+         assert resp.status.status_code.value == samlp.STATUS_RESPONDER
+         assert resp.status.status_code.status_code.value == \
+             samlp.STATUS_REQUEST_UNSUPPORTED
+@@ -321,11 +321,11 @@ class TestServer1():
+             "foba0001@example.com", authn=AUTHN)
+ 
+         response = samlp.response_from_string(resp_str)
+-        print response.keyswv()
++        print(response.keyswv())
+         assert _eq(response.keyswv(), ['status', 'destination', 'assertion',
+                                        'in_response_to', 'issue_instant',
+                                        'version', 'issuer', 'id'])
+-        print response.assertion[0].keyswv()
++        print(response.assertion[0].keyswv())
+         assert len(response.assertion) == 1
+         assert _eq(response.assertion[0].keyswv(), ['attribute_statement',
+                                                     'issue_instant', 'version',
+@@ -335,7 +335,7 @@ class TestServer1():
+         assertion = response.assertion[0]
+         assert len(assertion.attribute_statement) == 1
+         astate = assertion.attribute_statement[0]
+-        print astate
++        print(astate)
+         assert len(astate.attribute) == 4
+ 
+     def test_signed_response(self):
+@@ -353,7 +353,7 @@ class TestServer1():
+             sign_assertion=True
+         )
+ 
+-        print signed_resp
++        print(signed_resp)
+         assert signed_resp
+ 
+         sresponse = response_from_string(signed_resp)
+@@ -434,7 +434,7 @@ class TestServer2():
+ 
+     def test_do_attribute_reponse(self):
+         aa_policy = self.server.config.getattr("policy", "idp")
+-        print aa_policy.__dict__
++        print(aa_policy.__dict__)
+         response = self.server.create_attribute_response(
+             IDENTITY.copy(), "aaa", "http://example.com/sp/",
+             "urn:mace:example.com:sp:1")
+@@ -484,7 +484,7 @@ class TestServerLogout():
+     def test_1(self):
+         server = Server("idp_slo_redirect_conf")
+         req_id, request = _logout_request("sp_slo_redirect_conf")
+-        print request
++        print(request)
+         bindings = [BINDING_HTTP_REDIRECT]
+         response = server.create_logout_response(request, bindings)
+         binding, destination = server.pick_binding("single_logout_service",
+--- python-pysaml2-2.0.0.orig/tests/test_51_client.py
++++ python-pysaml2-2.0.0/tests/test_51_client.py
+@@ -54,10 +54,10 @@ def _leq(l1, l2):
+ #     client = Saml2Client({})
+ #     (ava, name_id, real_uri) = \
+ #             client.do_response(response, "xenosmilus.umdc.umu.se")
+-#     print 40*"="
+-#     print ava
+-#     print 40*","
+-#     print name_id
++#     print(40*"=")
++#     print(ava)
++#     print(40*",")
++#     print(name_id)
+ #     assert False
+ 
+ REQ1 = {"1.2.14": """<?xml version='1.0' encoding='UTF-8'?>
+@@ -112,7 +112,7 @@ class TestClient:
+ 
+         attrq = samlp.attribute_query_from_string(reqstr)
+ 
+-        print attrq.keyswv()
++        print(attrq.keyswv())
+         assert _leq(attrq.keyswv(), ['destination', 'subject', 'issue_instant',
+                                      'version', 'id', 'issuer'])
+ 
+@@ -141,7 +141,7 @@ class TestClient:
+             format=saml.NAMEID_FORMAT_PERSISTENT,
+             message_id="id1")
+ 
+-        print req.to_string()
++        print(req.to_string())
+         assert req.destination == "https://idp.example.com/idp/"
+         assert req.id == "id1"
+         assert req.version == "2.0"
+@@ -191,7 +191,7 @@ class TestClient:
+             "http://www.example.com/sso", message_id="id1")[1]
+ 
+         ar = samlp.authn_request_from_string(ar_str)
+-        print ar
++        print(ar)
+         assert ar.assertion_consumer_service_url == ("http://lingon.catalogix"
+                                                      ".se:8087/")
+         assert ar.destination == "http://www.example.com/sso"
+@@ -214,7 +214,7 @@ class TestClient:
+             message_id="666")[1]
+ 
+         ar = samlp.authn_request_from_string(ar_str)
+-        print ar
++        print(ar)
+         assert ar.id == "666"
+         assert ar.assertion_consumer_service_url == "http://lingon.catalogix" \
+                                                     ".se:8087/"
+@@ -229,7 +229,7 @@ class TestClient:
+         assert nid_policy.sp_name_qualifier == "urn:mace:example.com:it:tek"
+ 
+     def test_sign_auth_request_0(self):
+-        #print self.client.config
++        #print(self.client.config)
+ 
+         req_id, areq = self.client.create_authn_request(
+             "http://www.example.com/sso", sign=True, message_id="id1")
+@@ -241,11 +241,11 @@ class TestClient:
+         assert ar.signature
+         assert ar.signature.signature_value
+         signed_info = ar.signature.signed_info
+-        #print signed_info
++        #print(signed_info)
+         assert len(signed_info.reference) == 1
+         assert signed_info.reference[0].uri == "#id1"
+         assert signed_info.reference[0].digest_value
+-        print "------------------------------------------------"
++        print("------------------------------------------------")
+         try:
+             assert self.client.sec.correctly_signed_authn_request(
+                 ar_str, self.client.config.xmlsec_binary,
+@@ -284,7 +284,7 @@ class TestClient:
+         assert authn_response.response.assertion[0].issuer.text == IDP
+         session_info = authn_response.session_info()
+ 
+-        print session_info
++        print(session_info)
+         assert session_info["ava"] == {'mail': ['derek@nyy.mlb.com'],
+                                        'givenName': ['Derek'],
+                                        'sn': ['Jeter'],
+@@ -297,7 +297,7 @@ class TestClient:
+         # One person in the cache
+         assert len(self.client.users.subjects()) == 1
+         subject_id = self.client.users.subjects()[0]
+-        print "||||", self.client.users.get_info_from(subject_id, IDP)
++        print("||||", self.client.users.get_info_from(subject_id, IDP))
+         # The information I have about the subject comes from one source
+         assert self.client.users.issuers_of_info(subject_id) == [IDP]
+ 
+@@ -326,19 +326,19 @@ class TestClient:
+         issuers = [self.client.users.issuers_of_info(s) for s in
+                    self.client.users.subjects()]
+         # The information I have about the subjects comes from the same source
+-        print issuers
++        print(issuers)
+         assert issuers == [[IDP], [IDP]]
+ 
+     def test_init_values(self):
+         entityid = self.client.config.entityid
+-        print entityid
++        print(entityid)
+         assert entityid == "urn:mace:example.com:saml:roland:sp"
+-        print self.client.metadata.with_descriptor("idpsso")
++        print(self.client.metadata.with_descriptor("idpsso"))
+         location = self.client._sso_location()
+-        print location
++        print(location)
+         assert location == 'http://localhost:8088/sso'
+         my_name = self.client._my_name()
+-        print my_name
++        print(my_name)
+         assert my_name == "urn:mace:example.com:saml:roland:sp"
+ 
+ # Below can only be done with dummy Server
+@@ -399,7 +399,7 @@ class TestClientWithDummy():
+         entity_ids = self.client.users.issuers_of_info(nid)
+         assert entity_ids == ["urn:mace:example.com:saml:roland:idp"]
+         resp = self.client.global_logout(nid, "Tired", in_a_while(minutes=5))
+-        print resp
++        print(resp)
+         assert resp
+         assert len(resp) == 1
+         assert resp.keys() == entity_ids
+@@ -429,7 +429,7 @@ class TestClientWithDummy():
+                                  'application/x-www-form-urlencoded')]
+ 
+         response = self.client.send(**http_args)
+-        print response.text
++        print(response.text)
+         _dic = unpack_form(response.text[3], "SAMLResponse")
+         resp = self.client.parse_authn_request_response(_dic["SAMLResponse"],
+                                                         BINDING_HTTP_POST,
+--- python-pysaml2-2.0.0.orig/tests/test_62_vo.py
++++ python-pysaml2-2.0.0/tests/test_62_vo.py
+@@ -39,18 +39,18 @@ class TestVirtualOrg():
+ 
+     def test_mta(self):
+         aas = self.vo.members_to_ask(nid)
+-        print aas
++        print(aas)
+         assert len(aas) == 1
+         assert 'urn:mace:example.com:saml:aa' in aas
+ 
+     def test_unknown_subject(self):
+         aas = self.vo.members_to_ask(nid0)
+-        print aas
++        print(aas)
+         assert len(aas) == 2
+ 
+     def test_id(self):
+         cid = self.vo.get_common_identifier(nid)
+-        print cid
++        print(cid)
+         assert cid == "deje0001"
+ 
+     def test_id_unknown(self):
+@@ -68,18 +68,18 @@ class TestVirtualOrg_2():
+ 
+     def test_mta(self):
+         aas = self.sp.vorg.members_to_ask(nid)
+-        print aas
++        print(aas)
+         assert len(aas) == 1
+         assert 'urn:mace:example.com:saml:aa' in aas
+ 
+     def test_unknown_subject(self):
+         aas = self.sp.vorg.members_to_ask(nid0)
+-        print aas
++        print(aas)
+         assert len(aas) == 2
+ 
+     def test_id(self):
+         cid = self.sp.vorg.get_common_identifier(nid)
+-        print cid
++        print(cid)
+         assert cid == "deje0001"
+ 
+     def test_id_unknown(self):
+--- python-pysaml2-2.0.0.orig/tests/test_63_ecp.py
++++ python-pysaml2-2.0.0/tests/test_63_ecp.py
+@@ -121,7 +121,7 @@ def test_complete_flow():
+     ht_args = client.use_soap(idp_response, cargs["rc_url"],
+                               [cargs["relay_state"]])
+ 
+-    print ht_args
++    print(ht_args)
+ 
+     # ------------ @SP -----------------------------
+ 
+@@ -138,7 +138,7 @@ def test_complete_flow():
+ 
+     resp = sp.parse_authn_request_response(respdict["body"], None, {sid: "/"})
+ 
+-    print resp.response
++    print(resp.response)
+ 
+     assert resp.response.destination == "http://lingon.catalogix.se:8087/paos"
+     assert resp.response.status.status_code.value == STATUS_SUCCESS
+--- python-pysaml2-2.0.0.orig/tests/test_64_artifact.py
++++ python-pysaml2-2.0.0/tests/test_64_artifact.py
+@@ -85,7 +85,7 @@ def test_create_artifact_resolve():
+ 
+     msg_id, msg = idp.create_artifact_resolve(b64art, destination, sid())
+ 
+-    print msg
++    print(msg)
+ 
+     args = idp.use_soap(msg, destination, None, False)
+ 
+@@ -93,7 +93,7 @@ def test_create_artifact_resolve():
+ 
+     ar = sp.parse_artifact_resolve(args["data"])
+ 
+-    print ar
++    print(ar)
+ 
+     assert ar.artifact.text == b64art
+ 
+@@ -177,7 +177,7 @@ def test_artifact_flow():
+                                          authn=AUTHN,
+                                          **resp_args)
+ 
+-    print response
++    print(response)
+ 
+     # with the response in hand create an artifact
+ 
+@@ -201,7 +201,7 @@ def test_artifact_flow():
+     # Got an artifact want to replace it with the real message
+     msg_id, msg = sp.create_artifact_resolve(artifact3, destination, sid())
+ 
+-    print msg
++    print(msg)
+ 
+     hinfo = sp.use_soap(msg, destination, None, False)
+ 
+@@ -211,7 +211,7 @@ def test_artifact_flow():
+ 
+     ar = idp.parse_artifact_resolve(msg)
+ 
+-    print ar
++    print(ar)
+ 
+     assert ar.artifact.text == artifact3
+ 
+--- python-pysaml2-2.0.0.orig/tests/test_65_authn_query.py
++++ python-pysaml2-2.0.0/tests/test_65_authn_query.py
+@@ -55,7 +55,7 @@ def test_basic():
+ 
+     _id, aq = sp.create_authn_query(subject, destination, authn_context)
+ 
+-    print aq
++    print(aq)
+ 
+     assert isinstance(aq, AuthnQuery)
+ 
+@@ -104,7 +104,7 @@ def test_flow():
+ 
+     aq_id, aq = sp.create_authn_query(subject, destination, authn_context)
+ 
+-    print aq
++    print(aq)
+ 
+     assert isinstance(aq, AuthnQuery)
+     binding = BINDING_SOAP
+@@ -123,7 +123,7 @@ def test_flow():
+     p_res = idp.create_authn_query_response(msg.subject, msg.session_index,
+                                             msg.requested_authn_context)
+ 
+-    print p_res
++    print(p_res)
+ 
+     hinfo = idp.apply_binding(binding, "%s" % p_res, "", "state2",
+                               response=True)
+@@ -134,7 +134,7 @@ def test_flow():
+ 
+     final = sp.parse_authn_query_response(xmlstr, binding)
+ 
+-    print final
++    print(final)
+ 
+     assert final.response.id == p_res.id
+ 
+--- python-pysaml2-2.0.0.orig/tests/test_66_name_id_mapping.py
++++ python-pysaml2-2.0.0/tests/test_66_name_id_mapping.py
+@@ -23,7 +23,7 @@ def test_base_request():
+ 
+     mid, nmr = sp.create_name_id_mapping_request(policy, nameid, destination)
+ 
+-    print nmr
++    print(nmr)
+ 
+     assert isinstance(nmr, NameIDMappingRequest)
+ 
+@@ -43,7 +43,7 @@ def test_request_response():
+ 
+     mid, nmr = sp.create_name_id_mapping_request(policy, nameid, destination)
+ 
+-    print nmr
++    print(nmr)
+ 
+     args = sp.use_soap(nmr, destination)
+ 
+@@ -57,7 +57,7 @@ def test_request_response():
+     idp_response = idp.create_name_id_mapping_response(
+         name_id, in_response_to=in_response_to)
+ 
+-    print idp_response
++    print(idp_response)
+ 
+     ht_args = sp.use_soap(idp_response)
+ 
+@@ -65,7 +65,7 @@ def test_request_response():
+ 
+     _resp = sp.parse_name_id_mapping_request_response(ht_args["data"], binding)
+ 
+-    print _resp.response
++    print(_resp.response)
+ 
+     r_name_id = _resp.response.name_id
+ 
+--- python-pysaml2-2.0.0.orig/tests/test_67_manage_name_id.py
++++ python-pysaml2-2.0.0/tests/test_67_manage_name_id.py
+@@ -20,14 +20,14 @@ def test_basic():
+     mid, mreq = sp.create_manage_name_id_request(destination, name_id=nameid,
+                                            new_id=newid)
+ 
+-    print mreq
++    print(mreq)
+     rargs = sp.apply_binding(binding, "%s" % mreq, destination, "")
+ 
+     # --------- @IDP --------------
+ 
+     _req = idp.parse_manage_name_id_request(rargs["data"], binding)
+ 
+-    print _req.message
++    print(_req.message)
+ 
+     assert mid == _req.message.id
+ 
+@@ -44,14 +44,14 @@ def test_flow():
+     mid, midq = sp.create_manage_name_id_request(destination, name_id=nameid,
+                                            new_id=newid)
+ 
+-    print midq
++    print(midq)
+     rargs = sp.apply_binding(binding, "%s" % midq, destination, "")
+ 
+     # --------- @IDP --------------
+ 
+     _req = idp.parse_manage_name_id_request(rargs["data"], binding)
+ 
+-    print _req.message
++    print(_req.message)
+ 
+     mnir = idp.create_manage_name_id_response(_req.message, None)
+ 
+@@ -63,12 +63,12 @@ def test_flow():
+ 
+     respargs = idp.apply_binding(binding, "%s" % mnir, destination, "")
+ 
+-    print respargs
++    print(respargs)
+ 
+     # ---------- @SP ---------------
+ 
+     _response = sp.parse_manage_name_id_request_response(respargs["data"], binding)
+ 
+-    print _response.response
++    print(_response.response)
+ 
+     assert _response.response.id == mnir.id
+\ No newline at end of file
+--- python-pysaml2-2.0.0.orig/tests/test_68_assertion_id.py
++++ python-pysaml2-2.0.0/tests/test_68_assertion_id.py
+@@ -107,5 +107,5 @@ def test_basic_flow():
+ 
+     final = sp.parse_assertion_id_request_response(xmlstr, binding)
+ 
+-    print final.response
++    print(final.response)
+     assert isinstance(final.response, Assertion)
+\ No newline at end of file
+--- python-pysaml2-2.0.0.orig/tests/test_69_discovery.py
++++ python-pysaml2-2.0.0/tests/test_69_discovery.py
+@@ -42,7 +42,7 @@ def test_construct_deconstruct_request()
+         returnIDParam="foo",
+         return_url="https://example.com/saml/sp/disc")
+ 
+-    print url
++    print(url)
+ 
+     ds = DiscoveryServer(config_file=dotname("disco_conf"))
+     dsr = ds.parse_discovery_service_request(url)
+--- python-pysaml2-2.0.0.orig/tests/test_72_eptid.py
++++ python-pysaml2-2.0.0/tests/test_72_eptid.py
+@@ -6,13 +6,13 @@ __author__ = 'rolandh'
+ def test_eptid():
+     edb = Eptid("secret")
+     e1 = edb.get("idp_entity_id", "sp_entity_id", "user_id", "some other data")
+-    print e1
++    print(e1)
+     assert e1.startswith("idp_entity_id!sp_entity_id!")
+     e2 = edb.get("idp_entity_id", "sp_entity_id", "user_id", "some other data")
+     assert e1 == e2
+ 
+     e3 = edb.get("idp_entity_id", "sp_entity_id", "user_2", "some other data")
+-    print e3
++    print(e3)
+     assert e1 != e3
+ 
+     e4 = edb.get("idp_entity_id", "sp_entity_id2", "user_id", "some other data")
+@@ -23,13 +23,13 @@ def test_eptid():
+ def test_eptid_shelve():
+     edb = EptidShelve("secret", "eptid.db")
+     e1 = edb.get("idp_entity_id", "sp_entity_id", "user_id", "some other data")
+-    print e1
++    print(e1)
+     assert e1.startswith("idp_entity_id!sp_entity_id!")
+     e2 = edb.get("idp_entity_id", "sp_entity_id", "user_id", "some other data")
+     assert e1 == e2
+ 
+     e3 = edb.get("idp_entity_id", "sp_entity_id", "user_2", "some other data")
+-    print e3
++    print(e3)
+     assert e1 != e3
+ 
+     e4 = edb.get("idp_entity_id", "sp_entity_id2", "user_id", "some other data")
+--- python-pysaml2-2.0.0.orig/tests/test_75_mongodb.py
++++ python-pysaml2-2.0.0/tests/test_75_mongodb.py
+@@ -61,7 +61,7 @@ def test_eptid_mongo_db():
+     edb = EptidMDB("secret", "idp")
+     e1 = edb.get("idp_entity_id", "sp_entity_id", "user_id",
+                  "some other data")
+-    print e1
++    print(e1)
+     assert e1.startswith("idp_entity_id!sp_entity_id!")
+     e2 = edb.get("idp_entity_id", "sp_entity_id", "user_id",
+                  "some other data")
+@@ -69,7 +69,7 @@ def test_eptid_mongo_db():
+ 
+     e3 = edb.get("idp_entity_id", "sp_entity_id", "user_2",
+                  "some other data")
+-    print e3
++    print(e3)
+     assert e1 != e3
+ 
+     e4 = edb.get("idp_entity_id", "sp_entity_id2", "user_id",
+--- python-pysaml2-2.0.0.orig/tests/test_82_pefim.py
++++ python-pysaml2-2.0.0/tests/test_82_pefim.py
+@@ -34,7 +34,7 @@ req_id, req = client.create_authn_reques
+     extensions=extensions)
+ 
+ 
+-print req
++print(req)
+ 
+ # Get a certificate from an authn request
+ 
+--- python-pysaml2-2.0.0.orig/tests/test_83_md_extensions.py
++++ python-pysaml2-2.0.0/tests/test_83_md_extensions.py
+@@ -8,7 +8,7 @@ fil = "sp_mdext_conf.py"
+ cnf = Config().load_file(fil, metadata_construction=True)
+ ed = entity_descriptor(cnf)
+ 
+-print ed
++print(ed)
+ 
+ assert ed.spsso_descriptor.extensions
+ assert len(ed.spsso_descriptor.extensions.extension_elements) == 3
+--- python-pysaml2-2.0.0.orig/tools/make_metadata.py
++++ python-pysaml2-2.0.0/tools/make_metadata.py
+@@ -67,7 +67,7 @@ if args.id:
+     desc = entities_descriptor(eds, valid_for, args.name, args.id,
+                                args.sign, secc)
+     valid_instance(desc)
+-    print desc.to_string(nspair)
++    print(desc.to_string(nspair))
+ else:
+     for eid in eds:
+         if args.sign:
+@@ -75,5 +75,5 @@ else:
+         else:
+             desc = eid
+         valid_instance(desc)
+-        print desc.to_string(nspair)
++        print(desc.to_string(nspair))
+ 
+--- python-pysaml2-2.0.0.orig/tools/mdexport.py
++++ python-pysaml2-2.0.0/tools/mdexport.py
+@@ -73,4 +73,4 @@ if metad:
+         f.write(txt)
+         f.close()
+     else:
+-        print txt
++        print(txt)
+--- python-pysaml2-2.0.0.orig/tools/mdexport_test.py
++++ python-pysaml2-2.0.0/tools/mdexport_test.py
+@@ -65,7 +65,7 @@ def main():
+ 
+     if metad:
+         metad.load()
+-        print metad.dumps()
++        print(metad.dumps())
+ 
+ 
+ if __name__ == '__main__':
+--- python-pysaml2-2.0.0.orig/tools/mdimport.py
++++ python-pysaml2-2.0.0/tools/mdimport.py
+@@ -35,7 +35,7 @@ for i in range(1, 10):
+ 
+     _ = mdmd.keys()
+ 
+-print time.time() - start
++print(time.time() - start)
+ 
+ start = time.time()
+ for i in range(1, 10):
+@@ -44,4 +44,4 @@ for i in range(1, 10):
+     mdf.load()
+     _ = mdf.keys()
+ 
+-print time.time() - start
++print(time.time() - start)
+--- python-pysaml2-2.0.0.orig/tools/parse_xsd2.py
++++ python-pysaml2-2.0.0/tools/parse_xsd2.py
+@@ -835,9 +835,9 @@ def _spec(elem):
+         
+ def _do_from_string(name):
+     print
+-    print "def %s_from_string(xml_string):" % pyify(name)
+-    print "%sreturn saml2.create_class_from_xml_string(%s, xml_string)" % (
+-                INDENT, name)
++    print("def %s_from_string(xml_string):" % pyify(name))
++    print("%sreturn saml2.create_class_from_xml_string(%s, xml_string)" % (
++                INDENT, name))
+ 
+ def _namespace_and_tag(obj, param, top):
+     try:
+@@ -898,7 +898,7 @@ class Attribute(Simple):
+         # default, fixed, use, type
+                     
+         if DEBUG:
+-            print "#ATTR", self.__dict__
++            print("#ATTR", self.__dict__)
+ 
+         external = False
+         name = ""
+@@ -971,7 +971,7 @@ class Attribute(Simple):
+             pass
+         
+         if DEBUG:
+-            print "#--ATTR py_attr:%s" % (objekt,)
++            print("#--ATTR py_attr:%s" % (objekt,))
+             
+         return objekt
+         
+@@ -1077,8 +1077,8 @@ class Complex(object):
+             return self._own, self._inherited
+             
+         if DEBUG:
+-            print self.__dict__
+-            print "#-- %d parts" % len(self.parts)
++            print(self.__dict__)
++            print("#-- %d parts" % len(self.parts))
+         
+         self._extend(top, sup, argv, parent)
+         
+@@ -1094,7 +1094,7 @@ class Complex(object):
+         #     string = "== %s (%s)" % (self.name,self.__class__)
+         # except AttributeError:
+         #     string = "== (%s)" % (self.__class__,)
+-        # print string
++        # print(string)
+         for part in self.parts:
+             if isinstance(part, Element):
+                 res.append(name_or_ref(part, top))
+@@ -1169,7 +1169,7 @@ class Element(Complex):
+             argv_copy = sd_copy(argv)
+             return [self.repr(top, sup, argv_copy, parent=parent)], []
+         except AttributeError, exc:
+-            print "#!!!!", exc
++            print("#!!!!", exc)
+             return [], []
+ 
+     def elements(self, top):            
+@@ -1197,9 +1197,9 @@ class Element(Complex):
+             myname = ""
+ 
+         if DEBUG:
+-            print "#Element.repr '%s' (child=%s) [%s]" % (myname, 
++            print("#Element.repr '%s' (child=%s) [%s]" % (myname, 
+                                                             child, 
+-                                                            self._generated)
++                                                            self._generated))
+ 
+         self.py_class = objekt = PyElement(myname, root=top)
+         min_max(self, objekt, argv)
+@@ -1216,7 +1216,7 @@ class Element(Complex):
+                 objekt.ref = (namespace, superkl)                
+         except AttributeError, exc:
+             if DEBUG:
+-                print "#===>", exc
++                print("#===>", exc)
+ 
+             typ = self.type
+ 
+@@ -1257,7 +1257,7 @@ class Element(Complex):
+                             objekt.scoped = True
+                 else:
+                     if DEBUG:
+-                        print "$", self
++                        print("$", self)
+                     raise 
+ 
+             if parent:
+@@ -1310,7 +1310,7 @@ class Sequence(Complex):
+                 argv_copy[key] = val
+     
+         if DEBUG:
+-            print "#Sequence: %s" % argv
++            print("#Sequence: %s" % argv)
+         return Complex.collect(self, top, sup, argv_copy, parent)
+ 
+ 
+@@ -1336,7 +1336,7 @@ class Extension(Complex):
+             return self._own, self._inherited
+         
+         if DEBUG:
+-            print "#!!!", self.__dict__
++            print("#!!!", self.__dict__)
+ 
+         try:
+             base = self.base
+@@ -1346,14 +1346,14 @@ class Extension(Complex):
+                 cti = get_type_def(tag, top.parts)
+                 if not cti.py_class:
+                     cti.repr(top, sup)
+-                #print "#EXT..",ct._collection
++                #print("#EXT..",ct._collection)
+                 self._inherited = cti.py_class.properties[0][:]
+                 self._inherited.extend(cti.py_class.properties[1])
+             elif self.xmlns_map[namespace] == XMLSCHEMA: 
+                 base = tag
+             else:
+                 iattr = _import_attrs(top.modul[namespace], tag, top)
+-                #print "#EXT..-", ia
++                #print("#EXT..-", ia)
+                 self._inherited = iattr
+         except (AttributeError, ValueError):
+             base = None
+@@ -1373,7 +1373,7 @@ class Choice(Complex):
+         argv_copy["minOccurs"] = 0
+             
+         if DEBUG:
+-            print "#Choice: %s" % argv
++            print("#Choice: %s" % argv)
+         return Complex.collect(self, top, sup, argv_copy, parent=parent)
+ 
+ class Restriction(Complex):
+@@ -1411,11 +1411,11 @@ class ComplexType(Complex):
+                         else:
+                             new_sup = "%s.%s" % (namespace, name)
+                             
+-                        #print "#Superior: %s" % new_sup
++                        #print("#Superior: %s" % new_sup)
+                         if new_sup:
+                             sup = new_sup
+             else:
+-                #print "#>>", self.parts[0].__class__
++                #print("#>>", self.parts[0].__class__)
+                 pass
+                 
+         try:
+@@ -1474,7 +1474,7 @@ class Group(Complex):
+             except KeyError:
+                 raise Exception("Missing namespace definition")            
+         except AttributeError, exc:
+-            print "#!!!!", exc
++            print("#!!!!", exc)
+             return [], []
+ 
+     def repr(self, top=None, sup=None, argv=None, _child=True, parent=""):
+@@ -1615,7 +1615,7 @@ def sort_elements(els):
+             if pres != val:
+                 diff = True
+ 
+-        #print els
++        #print(els)
+         partres = []
+         for key, val in els.items():
+             if not val:
+@@ -1645,24 +1645,24 @@ def output(elem, target_namespace, eldic
+         if prep:
+             done = 1
+             if isinstance(prep, basestring):
+-                print prep
++                print(prep)
+             else:
+                 for item in prep:
+-                    print item
+-                    print
+-            print 
++                    print(item)
++                    print()
++            print()
+ 
+     if text:
+         done = 1
+         elem.done = True
+-        print text
+-        print
++        print(text)
++        print("")
+     
+     return done
+     
+ 
+ def intro():
+-    print """#!/usr/bin/env python
++    print("""#!/usr/bin/env python
+ 
+ #
+ # Generated %s by parse_xsd.py version %s.
+@@ -1670,7 +1670,7 @@ def intro():
+ 
+ import saml2
+ from saml2 import SamlBase
+-""" % (time.ctime(), __version__)
++""" % (time.ctime(), __version__))
+ 
+ #NAMESPACE = 'http://www.w3.org/2000/09/xmldsig#'
+     
+@@ -1759,7 +1759,7 @@ class Schema(Complex):
+                 udict[elem] = elem.undefined(eldict)
+ 
+         keys = [k.name for k in udict.keys()]
+-        print "#", keys
++        print("#", keys)
+         res = (None, [])
+         if not udict:
+             return res
+@@ -1834,19 +1834,19 @@ class Schema(Complex):
+         return undone
+         
+     def _element_from_string(self):
+-        print "ELEMENT_FROM_STRING = {"
++        print("ELEMENT_FROM_STRING = {")
+         for elem in self.elems:
+             if isinstance(elem, PyAttribute) or isinstance(elem, PyGroup):
+                 continue
+             if elem.abstract:
+                 continue
+-            print "%s%s.c_tag: %s_from_string," % (INDENT, elem.class_name, 
+-                                                    pyify(elem.class_name))
+-        print "}"
+-        print
++            print("%s%s.c_tag: %s_from_string," % (INDENT, elem.class_name, 
++                                                    pyify(elem.class_name)))
++        print("}")
++        print()
+         
+     def _element_by_tag(self):
+-        print "ELEMENT_BY_TAG = {"
++        print("ELEMENT_BY_TAG = {")
+         listed = []
+         for elem in self.elems:
+             if isinstance(elem, PyAttribute) or isinstance(elem, PyGroup):
+@@ -1854,17 +1854,17 @@ class Schema(Complex):
+             if elem.abstract:
+                 continue
+             lcen = elem.name
+-            print "%s'%s': %s," % (INDENT, lcen, elem.class_name)
++            print("%s'%s': %s," % (INDENT, lcen, elem.class_name))
+             listed.append(lcen)
+         for elem in self.elems:
+             if isinstance(elem, PyAttribute) or isinstance(elem, PyGroup):
+                 continue
+             lcen = elem.name
+             if elem.abstract and lcen not in listed:
+-                print "%s'%s': %s," % (INDENT, lcen, elem.class_name)
++                print("%s'%s': %s," % (INDENT, lcen, elem.class_name))
+                 listed.append(lcen)
+-        print "}"
+-        print
++        print("}")
++        print()
+         
+     def out(self):
+         for part in self.parts:
+@@ -1884,26 +1884,26 @@ class Schema(Complex):
+         for elem in self.elems:
+             eldict[elem.name] = elem
+ 
+-        #print eldict.keys()
++        #print(eldict.keys())
+         
+         intro()
+         for modul in self.add:
+-            print "from %s import *" % modul
++            print("from %s import *" % modul)
+         for _namespace, (mod, namn) in self.impo.items():
+             if namn:
+-                print "import %s as %s" % (mod, namn)
+-        print        
+-        print "NAMESPACE = '%s'" % self.target_namespace
+-        print
++                print("import %s as %s" % (mod, namn))
++        print()       
++        print("NAMESPACE = '%s'" % self.target_namespace)
++        print()
+ 
+         for defs in self.defs:
+-            print defs
+-            print
++            print(defs)
++            print()
+         
+         exceptions = []
+         block = []
+         while self._do(eldict):
+-            print "#.................."
++            print("#..................")
+             (objekt, tups) = self.adjust(eldict, block)
+             if not objekt:
+                 break
+@@ -1917,30 +1917,30 @@ class Schema(Complex):
+                 block = block_items(objekt, block, eldict)
+ 
+         if exceptions:
+-            print "#", 70*'+'
++            print("#", 70*'+')
+             for line in exceptions:
+-                print line
+-            print "#", 70*'+'
+-            print
++                print(line)
++            print("#", 70*'+')
++            print()
+         
+         for attrgrp in self.attrgrp:
+-            print "AG_%s = [" % attrgrp.name
++            print("AG_%s = [" % attrgrp.name)
+             for prop in attrgrp.properties[0]:
+                 if isinstance(prop.type, PyObj):
+-                    print "%s('%s', %s_, %s)," % (INDENT, prop.name, 
+-                                                prop.type.name, prop.required)
++                    print("%s('%s', %s_, %s)," % (INDENT, prop.name, 
++                                                prop.type.name, prop.required))
+                 else:
+-                    print "%s('%s', '%s', %s)," % (INDENT, prop.name, 
+-                                                    prop.type, prop.required)
+-            print "]"
+-            print
++                    print("%s('%s', '%s', %s)," % (INDENT, prop.name, 
++                                                    prop.type, prop.required))
++            print("]")
++            print()
+            
+         self._element_from_string() 
+         self._element_by_tag()
+-        print
+-        print "def factory(tag, **kwargs):"
+-        print "    return ELEMENT_BY_TAG[tag](**kwargs)"
+-        print
++        print()
++        print("def factory(tag, **kwargs):")
++        print("    return ELEMENT_BY_TAG[tag](**kwargs)")
++        print()
+         
+         
+ # -----------------------------------------------------------------------------
+@@ -1991,7 +1991,7 @@ def evaluate(typ, elem):
+     try:
+         return ELEMENTFUNCTION[typ](elem)
+     except KeyError:
+-        print "Unknown type", typ
++        print("Unknown type", typ)
+         
+     
+ NS_MAP = "xmlns_map"
+@@ -2015,14 +2015,14 @@ def parse_nsmap(fil):
+     return ElementTree.ElementTree(root)
+ 
+ def usage():
+-    print "Usage: parse_xsd [-i <module:as>] xsd.file > module.py"
++    print("Usage: parse_xsd [-i <module:as>] xsd.file > module.py")
+     
+ def recursive_find_module(name, path=None):
+     parts = name.split(".")
+ 
+     mod_a = None
+     for part in parts:
+-        #print "$$", part, path
++        #print("$$", part, path)
+         try:
+             (fil, pathname, desc) = imp.find_module(part, path)
+         except ImportError:
+@@ -2145,8 +2145,8 @@ def main(argv):
+         opts, args = getopt.getopt(argv, "a:d:hi:I:s:",
+                                     ["add=", "help", "import=", "defs="])
+     except getopt.GetoptError, err:
+-        # print help information and exit:
+-        print str(err) # will print something like "option -a not recognized"
++        # print() help information and exit:
++        print(str(err)) # will print() something like "option -a not recognized"
+         usage()
+         sys.exit(2)
+ 
+@@ -2177,12 +2177,12 @@ def main(argv):
+             assert False, "unhandled option"
+ 
+     if not args:
+-        print "No XSD-file specified"
++        print("No XSD-file specified")
+         usage()
+         sys.exit(2)
+ 
+     schema = read_schema(args[0], add, defs, impo, modul, ignore, sdir)
+-    #print schema.__dict__
++    #print(schema.__dict__)
+     schema.out()
+ 
+ if __name__ == "__main__":    
