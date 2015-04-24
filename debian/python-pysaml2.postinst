@@ -1,0 +1,14 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "configure" ] ; then
+	update-alternatives --install /usr/bin/pysaml2-make-metadata 	pysaml2-make-metadata 	/usr/bin/python2-pysaml2-make-metadata 300
+	update-alternatives --install /usr/bin/pysaml2-mdexport 	pysaml2-mdexport 	/usr/bin/python2-pysaml2-mdexport 300
+	update-alternatives --install /usr/bin/pysaml2-parse-xsd2 	pysaml2-parse-xsd2 	/usr/bin/python2-pysaml2-parse-xsd2 300
+fi
+
+#DEBHELPER#
+
+exit 0
+

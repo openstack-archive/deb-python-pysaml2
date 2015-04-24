@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 
 PYTHONS:=$(shell pyversions -vr)
-#PYTHON3S:=$(shell py3versions -vr)
+PYTHON3S:=$(shell py3versions -vr)
 
 UPSTREAM_GIT = git://github.com/rohe/pysaml2.git
 -include /usr/share/openstack-pkg-tools/pkgos.make
@@ -15,21 +15,28 @@ override_dh_install:
 			--root $(CURDIR)/debian/python-pysaml2; \
 	done
 	mv $(CURDIR)/debian/python-pysaml2/usr/bin/make_metadata.py \
-		$(CURDIR)/debian/python-pysaml2/usr/bin/pysaml2-make-metadata
+		$(CURDIR)/debian/python-pysaml2/usr/bin/python2-pysaml2-make-metadata
 	mv $(CURDIR)/debian/python-pysaml2/usr/bin/mdexport.py \
-		$(CURDIR)/debian/python-pysaml2/usr/bin/pysaml2-mdexport
+		$(CURDIR)/debian/python-pysaml2/usr/bin/python2-pysaml2-mdexport
 	mv $(CURDIR)/debian/python-pysaml2/usr/bin/parse_xsd2.py \
-		$(CURDIR)/debian/python-pysaml2/usr/bin/pysaml2-parse-xsd2
-# Python3 is not yet supported upstream
-#	set -e && for pyvers in $(PYTHON3S); do \
-#		python$$pyvers setup.py install --install-layout=deb \
-#			--root $(CURDIR)/debian/python3-pysaml2; \
-#	done
+		$(CURDIR)/debian/python-pysaml2/usr/bin/python2-pysaml2-parse-xsd2
+
+	set -e && for pyvers in $(PYTHON3S); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python3-pysaml2; \
+	done
+	mv $(CURDIR)/debian/python3-pysaml2/usr/bin/make_metadata.py \
+		$(CURDIR)/debian/python3-pysaml2/usr/bin/python3-pysaml2-make-metadata
+	mv $(CURDIR)/debian/python3-pysaml2/usr/bin/mdexport.py \
+		$(CURDIR)/debian/python3-pysaml2/usr/bin/python3-pysaml2-mdexport
+	mv $(CURDIR)/debian/python3-pysaml2/usr/bin/parse_xsd2.py \
+		$(CURDIR)/debian/python3-pysaml2/usr/bin/python3-pysaml2-parse-xsd2
+
 	rm -rf $(CURDIR)/debian/python*-pysaml2/usr/lib/python*/dist-packages/*.pth
 
 override_dh_auto_test:
 ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
-	set -e && for pyvers in 2.7; do \
+	set -e && for pyvers in 2.7 $(PYTHON3S) ; do \
 		PYTHONPATH=$(CURDIR)/src:. py.test-$$pyvers || true ; \
 	done
 endif

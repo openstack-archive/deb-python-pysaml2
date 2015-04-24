@@ -1,0 +1,14 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "remove" ] ; then
+	update-alternatives --remove pysaml2-make-metadata 	/usr/bin/python3-pysaml2-make-metadata
+	update-alternatives --remove pysaml2-mdexport 		/usr/bin/python3-pysaml2-mdexport
+	update-alternatives --remove pysaml2-parse-xsd2 	/usr/bin/python3-pysaml2-parse-xsd2
+fi
+
+#DEBHELPER#
+
+exit 0
+
