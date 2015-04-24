@@ -7,7 +7,7 @@ UPSTREAM_GIT = git://github.com/rohe/pysaml2.git
 -include /usr/share/openstack-pkg-tools/pkgos.make
 
 %:
-	dh $@ --buildsystem=python_distutils --with python2,sphinxdoc
+	dh $@ --buildsystem=python_distutils --with python2,python3,sphinxdoc
 
 override_dh_install:
 	set -e && for pyvers in $(PYTHONS); do \
