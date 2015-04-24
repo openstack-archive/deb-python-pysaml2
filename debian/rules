@@ -12,7 +12,7 @@ UPSTREAM_GIT = git://github.com/rohe/pysaml2.git
 override_dh_install:
 	set -e && for pyvers in $(PYTHONS); do \
 		python$$pyvers setup.py install --install-layout=deb \
-			--root $(CURDIR)/debian/python-pysaml2; \
+			--no-compile --root $(CURDIR)/debian/python-pysaml2; \
 	done
 	mv $(CURDIR)/debian/python-pysaml2/usr/bin/make_metadata.py \
 		$(CURDIR)/debian/python-pysaml2/usr/bin/python2-pysaml2-make-metadata
@@ -23,7 +23,7 @@ override_dh_install:
 
 	set -e && for pyvers in $(PYTHON3S); do \
 		python$$pyvers setup.py install --install-layout=deb \
-			--root $(CURDIR)/debian/python3-pysaml2; \
+			--no-compile --root $(CURDIR)/debian/python3-pysaml2; \
 	done
 	mv $(CURDIR)/debian/python3-pysaml2/usr/bin/make_metadata.py \
 		$(CURDIR)/debian/python3-pysaml2/usr/bin/python3-pysaml2-make-metadata
