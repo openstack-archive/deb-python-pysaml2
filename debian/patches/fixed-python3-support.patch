@@ -1,7 +1,27 @@
-Description: Fixes print statement -> print functions
+Description: <short summary of the patch>
+ TODO: Put a short summary on the line above and replace this paragraph
+ with a longer explanation of this change. Complete the meta-information
+ with other relevant fields (see below for details). To make it easier, the
+ information below has been extracted from the changelog. Adjust it or drop
+ it.
+ .
+ python-pysaml2 (2.0.0-2) experimental; urgency=medium
+ .
+   * Added Python 3 support.
 Author: Thomas Goirand <zigo@debian.org>
-Forwarded: no
-Last-Update: 2015-04-24
+
+---
+The information above should follow the Patch Tagging Guidelines, please
+checkout http://dep.debian.net/deps/dep3/ to learn about the format. Here
+are templates for supplementary fields that you might want to add:
+
+Origin: <vendor|upstream|other>, <url of original patch>
+Bug: <url in upstream bugtracker>
+Bug-Debian: https://bugs.debian.org/<bugnumber>
+Bug-Ubuntu: https://launchpad.net/bugs/<bugnumber>
+Forwarded: <no|not-needed|url proving that it has been forwarded>
+Reviewed-By: <name and email of someone who approved the patch>
+Last-Update: <YYYY-MM-DD>
 
 --- python-pysaml2-2.0.0.orig/example/idp2/idp.py
 +++ python-pysaml2-2.0.0/example/idp2/idp.py
@@ -407,6 +427,39 @@ Last-Update: 2015-04-24
              raise
          then = time.strptime(elem.groups()[0] + "Z", TIME_FORMAT)
  
+--- python-pysaml2-2.0.0.orig/src/saml2/validate.py
++++ python-pysaml2-2.0.0/src/saml2/validate.py
+@@ -337,10 +337,10 @@ def valid(typ, value):
+ def _valid_instance(instance, val):
+     try:
+         val.verify()
+-    except NotValid, exc:
++    except NotValid as exc:
+         raise NotValid("Class '%s' instance: %s" % (
+             instance.__class__.__name__, exc.args[0]))
+-    except OutsideCardinality, exc:
++    except OutsideCardinality as exc:
+         raise NotValid(
+             "Class '%s' instance cardinality error: %s" % (
+                 instance.__class__.__name__, exc.args[0]))
+@@ -361,7 +361,7 @@ def valid_instance(instance):
+         try:
+             validate_value_type(instance.text.strip(),
+                                 instclass.c_value_type)
+-        except NotValid, exc:
++        except NotValid as exc:
+             raise NotValid("Class '%s' instance: %s" % (class_name,
+                                                         exc.args[0]))
+ 
+@@ -382,7 +382,7 @@ def valid_instance(instance):
+                     validate_value_type(value, spec)
+                 else:
+                     valid(typ, value)
+-            except (NotValid, ValueError), exc:
++            except (NotValid, ValueError) as exc:
+                 txt = ERROR_TEXT % (value, name, exc.args[0])
+                 raise NotValid("Class '%s' instance: %s" % (class_name, txt))
+         
 --- python-pysaml2-2.0.0.orig/tests/_test_80_p11_backend.py
 +++ python-pysaml2-2.0.0/tests/_test_80_p11_backend.py
 @@ -151,9 +151,9 @@ class TestPKCS11():
@@ -1705,8 +1758,9 @@ Last-Update: 2015-04-24
          try:
              self.server.parse_authn_request(_dict["SAMLRequest"][0], binding)
              status = None
-         except OtherError, oe:
+-        except OtherError, oe:
 -            print oe.args
++        except OtherError as oe:
 +            print(oe.args)
              status = s_utils.error_status_factory(oe)
  
