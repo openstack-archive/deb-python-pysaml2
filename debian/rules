@@ -20,6 +20,8 @@ override_dh_install:
 		$(CURDIR)/debian/python-pysaml2/usr/bin/pysaml2-mdexport
 	mv $(CURDIR)/debian/python-pysaml2/usr/bin/parse_xsd2.py \
 		$(CURDIR)/debian/python-pysaml2/usr/bin/pysaml2-parse-xsd2
+	mv $(CURDIR)/debian/python-pysaml2/usr/bin/merge_metadata.py \
+		$(CURDIR)/debian/python-pysaml2/usr/bin/pysaml2-merge-metadata
 # Python3 is not yet supported upstream
 #	set -e && for pyvers in $(PYTHON3S); do \
 #		python$$pyvers setup.py install --install-layout=deb \
