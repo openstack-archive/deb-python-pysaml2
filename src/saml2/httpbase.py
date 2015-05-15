@@ -67,11 +67,20 @@ def _since_epoch(cdate):
         if len(cdate) < 5:
             return utc_now()
 
-    cdate = cdate[5:]
+    cdate = cdate[5:] # assume short weekday, i.e. do not support obsolete RFC 1036 date format
     try:
-        t = time.strptime(cdate, "%d-%b-%Y %H:%M:%S %Z")
+        t = time.strptime(cdate, "%d-%b-%Y %H:%M:%S %Z")   # e.g. 18-Apr-2014 12:30:51 GMT
     except ValueError:
-        t = time.strptime(cdate, "%d-%b-%y %H:%M:%S %Z")
+        try:
+            t = time.strptime(cdate, "%d-%b-%y %H:%M:%S %Z")   # e.g. 18-Apr-14 12:30:51 GMT
+        except ValueError:
+            try:
+                t = time.strptime(cdate, "%d %b %Y %H:%M:%S %Z")   # e.g. 18 Apr 2014 12:30:51 GMT
+            except ValueError:
+                raise Exception, 'ValueError: Date "{0}" does not match any of '.format(cdate) + \
+                                 '"%d-%b-%Y %H:%M:%S %Z", ' + \
+                                 '"%d-%b-%y %H:%M:%S %Z", ' + \
+                                 '"%d %b %Y %H:%M:%S %Z".'
     #return int(time.mktime(t))
     return calendar.timegm(t)
 
@@ -97,11 +106,11 @@ class HTTPBase(object):
                 self.request_args["verify"] = ca_bundle
             if key_file:
                 self.request_args["cert"] = (cert_file, key_file)
-        
+
         self.sec = None
         self.user = None
         self.passwd = None
-        
+
     def cookies(self, url):
         """
         Return cookies that are matching the path and are still valid
@@ -168,7 +177,7 @@ class HTTPBase(object):
                             std_attr[attr] = morsel[attr]
                 elif attr == "max-age":
                     if morsel["max-age"]:
-                        std_attr["expires"] = _since_epoch(morsel["max-age"])
+                        std_attr["expires"] = time.time() + int(morsel["max-age"])
 
             for att, item in PAIRS.items():
                 if std_attr[att]:
@@ -238,7 +247,8 @@ class HTTPBase(object):
 
         return r
 
-    def use_http_form_post(self, message, destination, relay_state,
+    @staticmethod
+    def use_http_form_post(message, destination, relay_state,
                            typ="SAMLRequest"):
         """
         Return a form that will automagically execute and POST the message
@@ -255,24 +265,8 @@ class HTTPBase(object):
 
         return http_form_post_message(message, destination, relay_state, typ)
 
-    def use_http_get(self, message, destination, relay_state,
-                     typ="SAMLRequest"):
-        """
-        Send a message using GET, this is the HTTP-Redirect case so
-        no direct response is expected to this request.
-
-        :param message:
-        :param destination:
-        :param relay_state:
-        :param typ: Whether a Request, Response or Artifact
-        :return: dictionary
-        """
-        if not isinstance(message, basestring):
-            message = "%s" % (message,)
-
-        return http_redirect_message(message, destination, relay_state, typ)
-
-    def use_http_artifact(self, message, destination="", relay_state=""):
+    @staticmethod
+    def use_http_artifact(message, destination="", relay_state=""):
         if relay_state:
             query = urllib.urlencode({"SAMLart": message,
                                       "RelayState": relay_state})
@@ -284,7 +278,8 @@ class HTTPBase(object):
         }
         return info
 
-    def use_http_uri(self, message, typ, destination="", relay_state=""):
+    @staticmethod
+    def use_http_uri(message, typ, destination="", relay_state=""):
         if typ == "SAMLResponse":
             info = {
                 "data": message.split("\n")[1],
@@ -346,7 +341,7 @@ class HTTPBase(object):
         :return:
         """
 
-        #_response = self.server.post(soap_message, headers, path=path)
+        # _response = self.server.post(soap_message, headers, path=path)
         try:
             args = self.use_soap(request, destination, headers, sign)
             args["headers"] = dict(args["headers"])
@@ -364,3 +359,24 @@ class HTTPBase(object):
     def add_credentials(self, user, passwd):
         self.user = user
         self.passwd = passwd
+
+    @staticmethod
+    def use_http_get(message, destination, relay_state,
+                     typ="SAMLRequest", sigalg="", key=None, **kwargs):
+        """
+        Send a message using GET, this is the HTTP-Redirect case so
+        no direct response is expected to this request.
+
+        :param message:
+        :param destination:
+        :param relay_state:
+        :param typ: Whether a Request, Response or Artifact
+        :param sigalg: The signature algorithm to use.
+        :param key: Key to use for signing
+        :return: dictionary
+        """
+        if not isinstance(message, basestring):
+            message = "%s" % (message,)
+
+        return http_redirect_message(message, destination, relay_state, typ,
+                                     sigalg, key)

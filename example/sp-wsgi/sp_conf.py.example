@@ -23,10 +23,15 @@ CONFIG = {
     "description": "Example SP",
     "service": {
         "sp": {
+            "authn_requests_signed": True,
+            "logout_requests_signed": True,
             "endpoints": {
                 "assertion_consumer_service": [
-                    ("%s/acs/redirect" % BASE, BINDING_HTTP_REDIRECT),
                     ("%s/acs/post" % BASE, BINDING_HTTP_POST)
+                ],
+                "single_logout_service": [
+                    ("%s/slo/redirect" % BASE, BINDING_HTTP_REDIRECT),
+                    ("%s/slo/post" % BASE, BINDING_HTTP_POST),
                 ],
             }
         },
@@ -35,7 +40,5 @@ CONFIG = {
     "cert_file": "pki/mycert.pem",
     "xmlsec_binary": xmlsec_path,
     "metadata": {"local": ["../idp2/idp.xml"]},
-    #"metadata": {"mdfile": ["./swamid2.md"]},
-    #"metadata": {"local": ["./swamid-2.0.xml"]},
     "name_form": NAME_FORMAT_URI,
 }

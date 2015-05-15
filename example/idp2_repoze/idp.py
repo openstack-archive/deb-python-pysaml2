@@ -19,6 +19,7 @@ from saml2 import BINDING_SOAP
 from saml2 import BINDING_HTTP_REDIRECT
 from saml2 import BINDING_HTTP_POST
 from saml2 import time_util
+from saml2.authn import is_equal
 
 from saml2.authn_context import AuthnBroker
 from saml2.authn_context import PASSWORD
@@ -406,15 +407,19 @@ class SSO(Service):
         try:
             authz_info = self.environ["HTTP_AUTHORIZATION"]
             if authz_info.startswith("Basic "):
-                _info = base64.b64decode(authz_info[6:])
-                logger.debug("Authz_info: %s" % _info)
                 try:
-                    (user, passwd) = _info.split(":")
-                    if PASSWD[user] != passwd:
-                        resp = Unauthorized()
-                    self.user = user
-                except ValueError:
+                    _info = base64.b64decode(authz_info[6:])
+                except TypeError:
                     resp = Unauthorized()
+                else:
+                    logger.debug("Authz_info: %s" % _info)
+                    try:
+                        (user, passwd) = _info.split(":")
+                        if is_equal(PASSWD[user], passwd):
+                            resp = Unauthorized()
+                        self.user = user
+                    except (ValueError, TypeError):
+                        resp = Unauthorized()
             else:
                 resp = Unauthorized()
         except KeyError:
@@ -758,7 +763,7 @@ def info_from_cookie(kaka):
             try:
                 key, ref = base64.b64decode(morsel.value).split(":")
                 return IDP.cache.uid2user[key], ref
-            except KeyError:
+            except (KeyError, TypeError):
                 return None, None
         else:
             logger.debug("No idpauthn cookie")
@@ -869,10 +874,10 @@ def application(environ, start_response):
     """
     The main WSGI application. Dispatch the current request to
     the functions from above and store the regular expression
-    captures in the WSGI environment as  `myapp.url_args` so that
+    captures in the WSGI environment as `myapp.url_args` so that
     the functions from above can access the url placeholders.
 
-    If nothing matches call the `not_found` function.
+    If nothing matches, call the `not_found` function.
     
     :param environ: The HTTP application environment
     :param start_response: The application to run when the handling of the 
@@ -977,10 +982,11 @@ if __name__ == '__main__':
                             module_directory=_rot + 'modules',
                             input_encoding='utf-8', output_encoding='utf-8')
 
+    HOST = '127.0.0.1'
     PORT = 8088
 
-    SRV = make_server('', PORT, application)
-    print "IdP listening on port: %s" % PORT
+    SRV = make_server(HOST, PORT, application)
+    print "IdP listening on %s:%s" % (HOST, PORT)
     SRV.serve_forever()
 else:
     _rot = args.mako_root

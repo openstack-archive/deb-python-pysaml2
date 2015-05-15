@@ -4,28 +4,59 @@
 import base64
 import urllib
 import urlparse
-from saml2.authn_context import INTERNETPROTOCOLPASSWORD
-from saml2.response import LogoutResponse
+from xmldsig import SIG_RSA_SHA256
+from saml2 import BINDING_HTTP_POST
+from saml2 import BINDING_HTTP_REDIRECT
+from saml2 import config
+from saml2 import class_name
+from saml2 import extension_elements_to_elements
+from saml2 import saml
+from saml2 import samlp
+from saml2 import sigver
+from saml2 import s_utils
+from saml2.assertion import Assertion
 
+from saml2.authn_context import INTERNETPROTOCOLPASSWORD
 from saml2.client import Saml2Client
-from saml2 import samlp, BINDING_HTTP_POST, BINDING_HTTP_REDIRECT
-from saml2 import saml, config, class_name
 from saml2.config import SPConfig
-from saml2.saml import NAMEID_FORMAT_PERSISTENT
+from saml2.response import LogoutResponse
+from saml2.saml import NAMEID_FORMAT_PERSISTENT, EncryptedAssertion
 from saml2.saml import NAMEID_FORMAT_TRANSIENT
 from saml2.saml import NameID
 from saml2.server import Server
+from saml2.sigver import pre_encryption_part
+from saml2.sigver import rm_xmltag
+from saml2.sigver import verify_redirect_signature
+from saml2.s_utils import do_attribute_statement
+from saml2.s_utils import factory
 from saml2.time_util import in_a_while
 
-from py.test import raises
-from fakeIDP import FakeIDP, unpack_form
-
+from fakeIDP import FakeIDP
+from fakeIDP import unpack_form
+from pathutils import full_path
 
 AUTHN = {
     "class_ref": INTERNETPROTOCOLPASSWORD,
     "authn_auth": "http://www.example.com/login"
 }
 
+
+def add_subelement(xmldoc, node_name, subelem):
+    s = xmldoc.find(node_name)
+    if s > 0:
+        x = xmldoc.rindex("<", 0, s)
+        tag = xmldoc[x+1:s-1]
+        c = s+len(node_name)
+        spaces = ""
+        while xmldoc[c] == " ":
+            spaces += " "
+            c += 1
+        xmldoc = xmldoc.replace(
+            "<%s:%s%s/>" % (tag, node_name, spaces),
+            "<%s:%s%s>%s</%s:%s>" % (tag, node_name, spaces, subelem, tag,
+                                     node_name))
+
+    return xmldoc
 
 def for_me(condition, me):
     for restriction in condition.audience_restriction:
@@ -84,6 +115,10 @@ nid = NameID(name_qualifier="foo", format=NAMEID_FORMAT_TRANSIENT,
              text="123456")
 
 
+def list_values2simpletons(_dict):
+    return dict([(k, v[0]) for k, v in _dict.items()])
+
+
 class TestClient:
     def setup_class(self):
         self.server = Server("idp_conf")
@@ -91,6 +126,9 @@ class TestClient:
         conf = config.SPConfig()
         conf.load_file("server_conf")
         self.client = Saml2Client(conf)
+
+    def teardown_class(self):
+        self.server.close()
 
     def test_create_attribute_query1(self):
         req_id, req = self.client.create_attribute_query(
@@ -341,8 +379,150 @@ class TestClient:
         print my_name
         assert my_name == "urn:mace:example.com:saml:roland:sp"
 
-# Below can only be done with dummy Server
+    def test_sign_then_encrypt_assertion(self):
+        # Begin with the IdPs side
+        _sec = self.server.sec
 
+        assertion = s_utils.assertion_factory(
+            subject=factory(saml.Subject, text="_aaa",
+                            name_id=factory(
+                                saml.NameID,
+                                format=saml.NAMEID_FORMAT_TRANSIENT)),
+            attribute_statement=do_attribute_statement(
+                {
+                    ("", "", "surName"): ("Jeter", ""),
+                    ("", "", "givenName"): ("Derek", ""),
+                }
+            ),
+            issuer=self.server._issuer(),
+        )
+
+        assertion.signature = sigver.pre_signature_part(
+            assertion.id, _sec.my_cert, 1)
+
+        sigass = _sec.sign_statement(assertion, class_name(assertion),
+                                     key_file=full_path("test.key"),
+                                     node_id=assertion.id)
+        # Create an Assertion instance from the signed assertion
+        _ass = saml.assertion_from_string(sigass)
+
+        response = sigver.response_factory(
+            in_response_to="_012345",
+            destination="https:#www.example.com",
+            status=s_utils.success_status_factory(),
+            issuer=self.server._issuer(),
+            assertion=_ass
+        )
+
+        enctext = _sec.crypto.encrypt_assertion(response, _sec.cert_file,
+                                                pre_encryption_part())
+
+        seresp = samlp.response_from_string(enctext)
+
+        # Now over to the client side
+        _csec = self.client.sec
+        if seresp.encrypted_assertion:
+            decr_text = _csec.decrypt(enctext)
+            seresp = samlp.response_from_string(decr_text)
+            resp_ass = []
+
+            sign_cert_file = full_path("test.pem")
+            for enc_ass in seresp.encrypted_assertion:
+                assers = extension_elements_to_elements(
+                    enc_ass.extension_elements, [saml, samlp])
+                for ass in assers:
+                    if ass.signature:
+                        if not _csec.verify_signature("%s" % ass,
+                                                      sign_cert_file,
+                                                      node_name=class_name(ass)):
+                            continue
+                    resp_ass.append(ass)
+
+            seresp.assertion = resp_ass
+            seresp.encrypted_assertion = None
+            #print _sresp
+
+        assert seresp.assertion
+
+    def test_sign_then_encrypt_assertion2(self):
+        # Begin with the IdPs side
+        _sec = self.server.sec
+
+        nameid_policy = samlp.NameIDPolicy(allow_create="false",
+                                           format=saml.NAMEID_FORMAT_PERSISTENT)
+
+        asser = Assertion({"givenName": "Derek", "surName": "Jeter"})
+        assertion = asser.construct(
+            self.client.config.entityid, "_012345",
+            "http://lingon.catalogix.se:8087/",
+            factory(saml.NameID, format=saml.NAMEID_FORMAT_TRANSIENT),
+            policy=self.server.config.getattr("policy", "idp"),
+            issuer=self.server._issuer(),
+            attrconvs=self.server.config.attribute_converters,
+            authn_class=INTERNETPROTOCOLPASSWORD,
+            authn_auth="http://www.example.com/login")
+
+        assertion.signature = sigver.pre_signature_part(
+            assertion.id, _sec.my_cert, 1)
+
+        sigass = _sec.sign_statement(assertion, class_name(assertion),
+                                     key_file=self.client.sec.key_file,
+                                     node_id=assertion.id)
+
+        sigass = rm_xmltag(sigass)
+
+        response = sigver.response_factory(
+            in_response_to="_012345",
+            destination="http://lingon.catalogix.se:8087/",
+            status=s_utils.success_status_factory(),
+            issuer=self.server._issuer(),
+            encrypted_assertion=EncryptedAssertion()
+        )
+
+        xmldoc = "%s" % response
+        # strangely enough I get different tags if I run this test separately
+        # or as part of a bunch of tests.
+        xmldoc = add_subelement(xmldoc, "EncryptedAssertion", sigass)
+
+        enctext = _sec.crypto.encrypt_assertion(xmldoc, _sec.cert_file,
+                                                pre_encryption_part())
+
+        #seresp = samlp.response_from_string(enctext)
+
+        resp_str = base64.encodestring(enctext)
+        # Now over to the client side
+        resp = self.client.parse_authn_request_response(
+            resp_str, BINDING_HTTP_POST,
+            {"_012345": "http://foo.example.com/service"})
+
+        #assert resp.encrypted_assertion == []
+        assert resp.assertion
+        assert resp.ava == {'givenName': ['Derek'], 'sn': ['Jeter']}
+
+    def test_signed_redirect(self):
+
+        msg_str = "%s" % self.client.create_authn_request(
+            "http://localhost:8088/sso", message_id="id1")[1]
+
+        key = self.client.signkey
+
+        info = self.client.apply_binding(
+            BINDING_HTTP_REDIRECT, msg_str, destination="",
+            relay_state="relay2", sigalg=SIG_RSA_SHA256, key=key)
+
+        loc = info["headers"][0][1]
+        qs = urlparse.parse_qs(loc[1:])
+        assert _leq(qs.keys(),
+                    ['SigAlg', 'SAMLRequest', 'RelayState', 'Signature'])
+
+        assert verify_redirect_signature(list_values2simpletons(qs),
+                                         sigkey=key)
+
+        res = self.server.parse_authn_request(qs["SAMLRequest"][0],
+                                              BINDING_HTTP_REDIRECT)
+        print res
+
+# Below can only be done with dummy Server
 IDP = "urn:mace:example.com:saml:roland:idp"
 
 
@@ -436,7 +616,7 @@ class TestClientWithDummy():
                                                         {sid: "/"})
         ac = resp.assertion.authn_statement[0].authn_context
         assert ac.authenticating_authority[0].text == \
-               'http://www.example.com/login'
+            'http://www.example.com/login'
         assert ac.authn_context_class_ref.text == INTERNETPROTOCOLPASSWORD
 
 
@@ -448,4 +628,4 @@ class TestClientWithDummy():
 if __name__ == "__main__":
     tc = TestClient()
     tc.setup_class()
-    tc.test_sign_auth_request_0()
+    tc.test_sign_then_encrypt_assertion2()

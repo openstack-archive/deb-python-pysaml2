@@ -169,3 +169,13 @@ example/sp-repoze/sp.xml
 example/sp-repoze/sp_conf.py
 
 example/sp-repoze/sp_conf.py
+
+example/idp2/sp_test.xml
+
+example/sp-repoze/idp_test.xml
+
+example/sp-repoze/sp_conf_example.py
+
+example/idp2/idp_conf_example.py
+
+example/sp-wsgi/sp_conf.py
