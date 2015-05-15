@@ -21,8 +21,7 @@ Build-Depends-Indep: python-crypto,
                      python-tz,
                      python-zope.interface,
                      xmlsec1
-Standards-Version: 3.9.5
-X-Python-Version: >= 2.7
+Standards-Version: 3.9.6
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-pysaml2.git
 Vcs-Git: git://anonscm.debian.org/openstack/python-pysaml2.git
 Homepage: https://github.com/rohe/pysaml2
