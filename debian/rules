@@ -6,6 +6,9 @@ PYTHONS:=$(shell pyversions -vr)
 UPSTREAM_GIT = git://github.com/rohe/pysaml2.git
 -include /usr/share/openstack-pkg-tools/pkgos.make
 
+LAST_CHANGE = $(shell dpkg-parsechangelog -S Date)
+BUILD_DATE  = $(shell LC_ALL=C date -u "+%B %d, %Y" -d "$(LAST_CHANGE)")
+
 %:
 	dh $@ --buildsystem=python_distutils --with python2,sphinxdoc
 
@@ -41,7 +44,7 @@ override_dh_clean:
 	rm -rf build
 
 override_dh_sphinxdoc:
-	sphinx-build -b html doc debian/python-pysaml2-doc/usr/share/doc/python-pysaml2-doc/html
+	sphinx-build -D today="$(BUILD_DATE)" -b html doc debian/python-pysaml2-doc/usr/share/doc/python-pysaml2-doc/html
 	dh_sphinxdoc -O--buildsystem=python_distutils
 
 # Commands not to run
