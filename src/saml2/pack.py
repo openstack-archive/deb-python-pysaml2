@@ -1,38 +1,25 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2010-2011 Umeå University
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#            http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
-"""Contains classes and functions that are necessary to implement 
+"""Contains classes and functions that are necessary to implement
 different bindings.
 
 Bindings normally consists of three parts:
-- rules about what to send 
+- rules about what to send
 - how to package the information
 - which protocol to use
 """
-import urlparse
+from six.moves.urllib.parse import urlparse, urlencode
 import saml2
 import base64
-import urllib
 from saml2.s_utils import deflate_and_base64_encode
 from saml2.s_utils import Unsupported
 import logging
 from saml2.sigver import REQ_ORDER
 from saml2.sigver import RESP_ORDER
 from saml2.sigver import SIGNER_ALGS
+import six
 
 logger = logging.getLogger(__name__)
 
@@ -53,15 +40,16 @@ NAMESPACE = "http://schemas.xmlsoap.org/soap/envelope/"
 FORM_SPEC = """<form method="post" action="%s">
    <input type="hidden" name="%s" value="%s" />
    <input type="hidden" name="RelayState" value="%s" />
+   <input type="submit" value="Submit" />
 </form>"""
 
 
 def http_form_post_message(message, location, relay_state="",
-                           typ="SAMLRequest"):
-    """The HTTP POST binding defines a mechanism by which SAML protocol 
+                           typ="SAMLRequest", **kwargs):
+    """The HTTP POST binding defines a mechanism by which SAML protocol
     messages may be transmitted within the base64-encoded content of a
     HTML form control.
-    
+
     :param message: The message
     :param location: Where the form should be posted to
     :param relay_state: for preserving and conveying state information
@@ -69,34 +57,37 @@ def http_form_post_message(message, location, relay_state="",
     """
     response = ["<head>", """<title>SAML 2.0 POST</title>""", "</head><body>"]
 
-    if not isinstance(message, basestring):
-        message = "%s" % (message,)
+    if not isinstance(message, six.string_types):
+        message = str(message)
+    if not isinstance(message, six.binary_type):
+        message = message.encode('utf-8')
 
     if typ == "SAMLRequest" or typ == "SAMLResponse":
         _msg = base64.b64encode(message)
     else:
         _msg = message
+    _msg = _msg.decode('ascii')
 
     response.append(FORM_SPEC % (location, typ, _msg, relay_state))
-                                
+
     response.append("""<script type="text/javascript">""")
     response.append("     window.onload = function ()")
     response.append(" { document.forms[0].submit(); }")
     response.append("""</script>""")
     response.append("</body>")
-    
+
     return {"headers": [("Content-type", "text/html")], "data": response}
 
 
 def http_redirect_message(message, location, relay_state="", typ="SAMLRequest",
-                          sigalg=None, key=None):
-    """The HTTP Redirect binding defines a mechanism by which SAML protocol 
+                          sigalg=None, key=None, **kwargs):
+    """The HTTP Redirect binding defines a mechanism by which SAML protocol
     messages can be transmitted within URL parameters.
-    Messages are encoded for use with this binding using a URL encoding 
-    technique, and transmitted using the HTTP GET method. 
-    
+    Messages are encoded for use with this binding using a URL encoding
+    technique, and transmitted using the HTTP GET method.
+
     The DEFLATE Encoding is used in this function.
-    
+
     :param message: The message
     :param location: Where the message should be posted to
     :param relay_state: for preserving and conveying state information
@@ -105,8 +96,8 @@ def http_redirect_message(message, location, relay_state="", typ="SAMLRequest",
     :param key: Key to use for signing
     :return: A tuple containing header information and a HTML message.
     """
-    
-    if not isinstance(message, basestring):
+
+    if not isinstance(message, six.string_types):
         message = "%s" % (message,)
 
     _order = None
@@ -125,9 +116,7 @@ def http_redirect_message(message, location, relay_state="", typ="SAMLRequest",
         args["RelayState"] = relay_state
 
     if sigalg:
-        # sigalgs
-        # http://www.w3.org/2000/09/xmldsig#dsa-sha1
-        # http://www.w3.org/2000/09/xmldsig#rsa-sha1
+        # sigalgs, one of the ones defined in xmldsig
 
         args["SigAlg"] = sigalg
 
@@ -136,17 +125,18 @@ def http_redirect_message(message, location, relay_state="", typ="SAMLRequest",
         except:
             raise Unsupported("Signing algorithm")
         else:
-            string = "&".join([urllib.urlencode({k: args[k]}) for k in _order if k in args])
+            string = "&".join([urlencode({k: args[k]})
+                               for k in _order if k in args]).encode('ascii')
             args["Signature"] = base64.b64encode(signer.sign(string, key))
-            string = urllib.urlencode(args)
+            string = urlencode(args)
     else:
-        string = urllib.urlencode(args)
+        string = urlencode(args)
 
-    glue_char = "&" if urlparse.urlparse(location).query else "?"
+    glue_char = "&" if urlparse(location).query else "?"
     login_url = glue_char.join([location, string])
     headers = [('Location', str(login_url))]
     body = []
-    
+
     return {"headers": headers, "data": body}
 
 
@@ -176,17 +166,20 @@ def make_soap_enveloped_saml_thingy(thingy, header_parts=None):
     body.tag = '{%s}Body' % NAMESPACE
     envelope.append(body)
 
-    if isinstance(thingy, basestring):
+    if isinstance(thingy, six.string_types):
         # remove the first XML version/encoding line
-        logger.debug("thingy0: %s" % thingy)
-        _part = thingy.split("\n")
-        thingy = "".join(_part[1:])
+        if thingy[0:5].lower() == '<?xml':
+            logger.debug("thingy0: %s" % thingy)
+            _part = thingy.split("\n")
+            thingy = "".join(_part[1:])
         thingy = thingy.replace(PREFIX, "")
         logger.debug("thingy: %s" % thingy)
         _child = ElementTree.Element('')
         _child.tag = '{%s}FuddleMuddle' % DUMMY_NAMESPACE
         body.append(_child)
         _str = ElementTree.tostring(envelope, encoding="UTF-8")
+        if isinstance(_str, six.binary_type):
+            _str = _str.decode('utf-8')
         logger.debug("SOAP precursor: %s" % _str)
         # find an remove the namespace definition
         i = _str.find(DUMMY_NAMESPACE)
@@ -205,27 +198,27 @@ def make_soap_enveloped_saml_thingy(thingy, header_parts=None):
 def http_soap_message(message):
     return {"headers": [("Content-type", "application/soap+xml")],
             "data": make_soap_enveloped_saml_thingy(message)}
-    
+
 
 def http_paos(message, extra=None):
     return {"headers": [("Content-type", "application/soap+xml")],
             "data": make_soap_enveloped_saml_thingy(message, extra)}
-    
+
 
 def parse_soap_enveloped_saml(text, body_class, header_class=None):
     """Parses a SOAP enveloped SAML thing and returns header parts and body
 
-    :param text: The SOAP object as XML 
+    :param text: The SOAP object as XML
     :return: header parts and body as saml.samlbase instances
     """
     envelope = ElementTree.fromstring(text)
     assert envelope.tag == '{%s}Envelope' % NAMESPACE
 
-    #print len(envelope)
+    #print(len(envelope))
     body = None
     header = {}
     for part in envelope:
-        #print ">",part.tag
+        #print(">",part.tag)
         if part.tag == '{%s}Body' % NAMESPACE:
             for sub in part:
                 try:
@@ -236,16 +229,16 @@ def parse_soap_enveloped_saml(text, body_class, header_class=None):
         elif part.tag == '{%s}Header' % NAMESPACE:
             if not header_class:
                 raise Exception("Header where I didn't expect one")
-            #print "--- HEADER ---"
+            #print("--- HEADER ---")
             for sub in part:
-                #print ">>",sub.tag
+                #print(">>",sub.tag)
                 for klass in header_class:
-                    #print "?{%s}%s" % (klass.c_namespace,klass.c_tag)
+                    #print("?{%s}%s" % (klass.c_namespace,klass.c_tag))
                     if sub.tag == "{%s}%s" % (klass.c_namespace, klass.c_tag):
                         header[sub.tag] = \
                             saml2.create_class_from_element_tree(klass, sub)
                         break
-                        
+
     return body, header
 
 # -----------------------------------------------------------------------------
@@ -254,14 +247,15 @@ PACKING = {
     saml2.BINDING_HTTP_REDIRECT: http_redirect_message,
     saml2.BINDING_HTTP_POST: http_form_post_message,
 }
-    
+
 
 def packager(identifier):
     try:
         return PACKING[identifier]
     except KeyError:
-        raise Exception("Unkown binding type: %s" % identifier)
+        raise Exception("Unknown binding type: %s" % identifier)
 
 
-def factory(binding, message, location, relay_state="", typ="SAMLRequest"):
-    return PACKING[binding](message, location, relay_state, typ)
+def factory(binding, message, location, relay_state="", typ="SAMLRequest",
+            **kwargs):
+    return PACKING[binding](message, location, relay_state, typ, **kwargs)

@@ -5,11 +5,10 @@
 #
 
 import saml2
-from saml2 import SamlBase
-
-import xmldsig as ds
-import xmlenc as xenc
 from saml2 import saml
+from saml2 import SamlBase
+from saml2 import xmldsig as ds
+from saml2 import xmlenc as xenc
 
 NAMESPACE = 'urn:oasis:names:tc:SAML:2.0:metadata'
 
@@ -1039,10 +1038,8 @@ class IDPSSODescriptorType_(SSODescriptorType_):
     c_children['{urn:oasis:names:tc:SAML:2.0:assertion}Attribute'] = (
         'attribute', [saml.Attribute])
     c_cardinality['attribute'] = {"min": 0}
-    c_attributes['WantAuthnRequestsSigned'] = ('want_authn_requests_signed',
-                                               'boolean', False)
-    c_attributes['WantAuthnRequestsOnlyWithValidCert'] = ('want_authn_requests_only_with_valid_cert',
-                                               'boolean', False)
+    c_attributes['WantAuthnRequestsSigned'] = (
+        'want_authn_requests_signed', 'boolean', False)
     c_child_order.extend(['single_sign_on_service', 'name_id_mapping_service',
                           'assertion_id_request_service', 'attribute_profile',
                           'attribute'])

@@ -1,12 +1,13 @@
 import copy
 import shelve
 import logging
+import six
 
 from hashlib import sha256
-from urllib import quote
-from urllib import unquote
+from six.moves.urllib.parse import quote
+from six.moves.urllib.parse import unquote
 from saml2 import SAMLError
-from saml2.s_utils import rndstr
+from saml2.s_utils import rndbytes
 from saml2.s_utils import PolicyError
 from saml2.saml import NameID
 from saml2.saml import NAMEID_FORMAT_PERSISTENT
@@ -26,6 +27,15 @@ class Unknown(SAMLError):
 
 
 def code(item):
+    """
+    Turn a NameID class instance into a quoted string of comma separated
+    attribute,value pairs. The attribute name is replaced with a digits.
+    Depends on knowledge on the specific order of the attributes for that
+    class that is used.
+
+    :param item: The class instance
+    :return: A quoted string
+    """
     _res = []
     i = 0
     for attr in ATTR:
@@ -36,11 +46,29 @@ def code(item):
     return ",".join(_res)
 
 
+def code_binary(item):
+    """
+    Return a binary 'code' suitable for hashing.
+    """
+    code_str = code(item)
+    if isinstance(code_str, six.string_types):
+        return code_str.encode('utf-8')
+    return code_str
+
+
 def decode(txt):
+    """Turns a coded string by code() into a NameID class instance.
+
+    :param txt: The coded string
+    """
     _nid = NameID()
     for part in txt.split(","):
-        i, val = part.split("=")
-        setattr(_nid, ATTR[int(i)], unquote(val))
+        if part.find("=") != -1:
+            i, val = part.split("=")
+            try:
+                setattr(_nid, ATTR[int(i)], unquote(val))
+            except:
+                pass
     return _nid
 
 
@@ -49,19 +77,25 @@ class IdentDB(object):
      Keeps a list of all nameIDs returned per SP
     """
     def __init__(self, db, domain="", name_qualifier=""):
-        if isinstance(db, basestring):
-            self.db = shelve.open(db)
+        if isinstance(db, six.string_types):
+            self.db = shelve.open(db, protocol=2)
         else:
             self.db = db
         self.domain = domain
         self.name_qualifier = name_qualifier
 
     def _create_id(self, nformat, name_qualifier="", sp_name_qualifier=""):
-        _id = sha256(rndstr(32))
+        _id = sha256(rndbytes(32))
+        if not isinstance(nformat, six.binary_type):
+            nformat = nformat.encode('utf-8')
         _id.update(nformat)
         if name_qualifier:
+            if not isinstance(name_qualifier, six.binary_type):
+                name_qualifier = name_qualifier.encode('utf-8')
             _id.update(name_qualifier)
         if sp_name_qualifier:
+            if not isinstance(sp_name_qualifier, six.binary_type):
+                sp_name_qualifier = sp_name_qualifier.encode('utf-8')
             _id.update(sp_name_qualifier)
         return _id.hexdigest()
 
@@ -72,9 +106,12 @@ class IdentDB(object):
         return _id
 
     def store(self, ident, name_id):
-        if isinstance(ident, unicode):
-            ident = ident.encode("utf-8")
+        """
 
+        :param ident: user identifier
+        :param name_id: NameID instance
+        """
+        # One user may have more than one NameID defined
         try:
             val = self.db[ident].split(" ")
         except KeyError:
@@ -83,11 +120,16 @@ class IdentDB(object):
         _cn = code(name_id)
         val.append(_cn)
         self.db[ident] = " ".join(val)
-        self.db[_cn] = ident
+        self.db[name_id.text] = ident
 
     def remove_remote(self, name_id):
+        """
+        Remove a NameID to userID mapping
+
+        :param name_id: NameID instance
+        """
         _cn = code(name_id)
-        _id = self.db[_cn]
+        _id = self.db[name_id.text]
         try:
             vals = self.db[_id].split(" ")
             vals.remove(_cn)
@@ -95,7 +137,7 @@ class IdentDB(object):
         except KeyError:
             pass
 
-        del self.db[_cn]
+        del self.db[name_id.text]
 
     def remove_local(self, sid):
         if isinstance(sid, unicode):
@@ -104,7 +146,8 @@ class IdentDB(object):
         try:
             for val in self.db[sid].split(" "):
                 try:
-                    del self.db[val]
+                    nid = decode(val)
+                    del self.db[nid.text]
                 except KeyError:
                     pass
             del self.db[sid]
@@ -130,17 +173,25 @@ class IdentDB(object):
         return nameid
 
     def find_nameid(self, userid, **kwargs):
+        """
+        Find a set of NameID's that matches the search criteria.
+
+        :param userid: User id
+        :param kwargs: The search filter a set of attribute/value pairs
+        :return: a list of NameID instances
+        """
         res = []
         try:
             _vals = self.db[userid]
         except KeyError:
+            logger.debug("failed to find userid %s in IdentDB" % userid)
             return res
 
         for val in _vals.split(" "):
             nid = decode(val)
             if kwargs:
-                for key, val in kwargs.items():
-                    if getattr(nid, key, None) != val:
+                for key, _val in kwargs.items():
+                    if getattr(nid, key, None) != _val:
                         break
                 else:
                     res.append(nid)
@@ -227,10 +278,10 @@ class IdentDB(object):
         """
 
         try:
-            return self.db[code(name_id)]
+            return self.db[name_id.text]
         except KeyError:
-            logger.debug("name: %s" % code(name_id))
-            logger.debug("id keys: %s" % self.db.keys())
+            logger.debug("name: %s" % name_id.text)
+            #logger.debug("id sub keys: %s" % self.subkeys())
             return None
 
     def match_local_id(self, userid, sp_name_qualifier, name_qualifier):
@@ -316,4 +367,9 @@ class IdentDB(object):
         return name_id
 
     def close(self):
-        self.db.close()
+        if hasattr(self.db, 'close'):
+            self.db.close()
+
+    def sync(self):
+        if hasattr(self.db, 'sync'):
+            self.db.sync()

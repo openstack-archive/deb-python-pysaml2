@@ -2,7 +2,7 @@
 from Cookie import SimpleCookie
 import logging
 import os
-
+import sp_conf
 from sp_conf import CONFIG
 import re
 import subprocess
@@ -96,7 +96,7 @@ def whoami(environ, start_response, user):
     if not nameid:
         return not_authn(environ, start_response)
     if ava:
-        response = ["<h2>Your identity are supposed to be</h2>"]
+        response = ["<h2>Your identity is supposed to be</h2>"]
         response.extend(dict_to_table(ava))
     else:
         response = [
@@ -222,10 +222,10 @@ def application(environ, start_response):
     """
     The main WSGI application. Dispatch the current request to
     the functions from above and store the regular expression
-    captures in the WSGI environment as  `myapp.url_args` so that
+    captures in the WSGI environment as `myapp.url_args` so that
     the functions from above can access the url placeholders.
 
-    If nothing matches call the `not_found` function.
+    If nothing matches, call the `not_found` function.
     
     :param environ: The HTTP application environment
     :param start_response: The application to run when the handling of the 
@@ -268,7 +268,8 @@ app_with_auth = make_middleware_with_config(application, {"here": "."},
                                             log_file="repoze_who.log")
 
 # ----------------------------------------------------------------------------
-PORT = 8087
+HOST = sp_conf.HOST
+PORT = sp_conf.PORT
 
 # allow uwsgi or gunicorn mount
 # by moving some initialization out of __name__ == '__main__' section.
@@ -291,6 +292,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     from wsgiref.simple_server import make_server
-    srv = make_server('', PORT, app_with_auth)
-    print "SP listening on port: %s" % PORT
+    srv = make_server(HOST, PORT, app_with_auth)
+    print("SP listening on %s:%s" % (HOST, PORT))
     srv.serve_forever()

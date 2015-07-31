@@ -1,19 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) s2010-2011 Umeå University
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#            http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 import os
 import sys
@@ -218,9 +205,9 @@ def list_to_local(acs, attrlist, allow_unknown_attributes=False):
 
 def from_local(acs, ava, name_format):
     for aconv in acs:
-        #print ac.format, name_format
+        #print(ac.format, name_format)
         if aconv.name_format == name_format:
-            #print "Found a name_form converter"
+            #print("Found a name_form converter")
             return aconv.to_(ava)
 
     return None
@@ -234,9 +221,9 @@ def from_local_name(acs, attr, name_format):
     :return: An Attribute instance
     """
     for aconv in acs:
-        #print ac.format, name_format
+        #print(ac.format, name_format)
         if aconv.name_format == name_format:
-            #print "Found a name_form converter"
+            #print("Found a name_form converter")
             return aconv.to_format(attr)
     return attr
 
@@ -253,6 +240,13 @@ def to_local_name(acs, attr):
             return lattr
 
     return attr.friendly_name
+
+
+def get_local_name(acs, attr, name_format):
+    for aconv in acs:
+        #print(ac.format, name_format)
+        if aconv.name_format == name_format:
+            return aconv._fro[attr]
 
 
 def d_to_local_name(acs, attr):
@@ -292,7 +286,7 @@ class AttributeConverter(object):
                 [(value.lower(), key) for key, value in self._to.items()])
         if self._to is None and self.fro is not None:
             self._to = dict(
-                [(value.lower, key) for key, value in self._fro.items()])
+                [(value.lower(), key) for key, value in self._fro.items()])
 
     def from_dict(self, mapdict):
         """ Import the attribute map from  a dictionary
@@ -440,7 +434,7 @@ class AttributeConverter(object):
 
     def from_format(self, attr):
         """ Find out the local name of an attribute
-         
+
         :param attr: An saml.Attribute instance
         :return: The local attribute name or "" if no mapping could be made
         """
@@ -486,10 +480,10 @@ class AttributeConverter(object):
         """
         attributes = []
         for key, value in attrvals.items():
-            key = key.lower()
+            lkey = key.lower()
             try:
                 attributes.append(factory(saml.Attribute,
-                                          name=self._to[key],
+                                          name=self._to[lkey],
                                           name_format=self.name_format,
                                           friendly_name=key,
                                           attribute_value=do_ava(value)))

@@ -2,6 +2,7 @@ import logging
 from urllib import urlencode
 from urlparse import parse_qs
 from urlparse import urlsplit
+import six
 import time
 import ldap
 from saml2 import SAMLError
@@ -39,6 +40,16 @@ class UserAuthnMethod(object):
         raise NotImplemented
 
 
+def is_equal(a, b):
+    if len(a) != len(b):
+        return False
+
+    result = 0
+    for x, y in zip(a, b):
+        result |= x ^ y
+    return result == 0
+
+
 def url_encode_params(params=None):
     if not isinstance(params, dict):
         raise EncodeError("You must pass in a dictionary!")
@@ -67,7 +78,7 @@ def create_return_url(base, query, **kwargs):
 
     for key, values in parse_qs(query).items():
         if key in kwargs:
-            if isinstance(kwargs[key], basestring):
+            if isinstance(kwargs[key], six.string_types):
                 kwargs[key] = [kwargs[key]]
             kwargs[key].extend(values)
         else:
@@ -76,7 +87,7 @@ def create_return_url(base, query, **kwargs):
     if part.query:
         for key, values in parse_qs(part.query).items():
             if key in kwargs:
-                if isinstance(kwargs[key], basestring):
+                if isinstance(kwargs[key], six.string_types):
                     kwargs[key] = [kwargs[key]]
                 kwargs[key].extend(values)
             else:
@@ -137,7 +148,7 @@ class UsernamePasswordMako(UserAuthnMethod):
         return resp
 
     def _verify(self, pwd, user):
-        assert pwd == self.passwd[user]
+        assert is_equal(pwd, self.passwd[user])
 
     def verify(self, request, **kwargs):
         """
@@ -149,16 +160,14 @@ class UsernamePasswordMako(UserAuthnMethod):
             wants the user after authentication.
         """
 
-        logger.debug("verify(%s)" % request)
-        if isinstance(request, basestring):
+        #logger.debug("verify(%s)" % request)
+        if isinstance(request, six.string_types):
             _dict = parse_qs(request)
         elif isinstance(request, dict):
             _dict = request
         else:
             raise ValueError("Wrong type of input")
 
-        logger.debug("dict: %s" % _dict)
-        logger.debug("passwd: %s" % self.passwd)
         # verify username and password
         try:
             self._verify(_dict["password"][0], _dict["login"][0])

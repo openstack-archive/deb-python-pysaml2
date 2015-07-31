@@ -6,10 +6,10 @@ from pymongo.mongo_replica_set_client import MongoReplicaSetClient
 import pymongo.uri_parser
 import pymongo.errors
 from saml2.eptid import Eptid
-from saml2.mdstore import MetaData
+from saml2.mdstore import InMemoryMetaData
 from saml2.s_utils import PolicyError
 
-from saml2.ident import code, IdentDB, Unknown
+from saml2.ident import code_binary, IdentDB, Unknown
 from saml2.mdie import to_dict, from_dict
 
 from saml2 import md
@@ -19,8 +19,9 @@ from saml2.extension import idpdisc
 from saml2.extension import dri
 from saml2.extension import mdattr
 from saml2.extension import ui
-import xmldsig
-import xmlenc
+from saml2 import xmldsig
+from saml2 import xmlenc
+import six
 
 
 ONTS = {
@@ -58,7 +59,7 @@ class SessionStorageMDB(object):
 
     def store_assertion(self, assertion, to_sign):
         name_id = assertion.subject.name_id
-        nkey = sha1(code(name_id)).hexdigest()
+        nkey = sha1(code_binary(name_id)).hexdigest()
 
         doc = {
             "name_id_key": nkey,
@@ -93,7 +94,7 @@ class SessionStorageMDB(object):
         :return:
         """
         result = []
-        key = sha1(code(name_id)).hexdigest()
+        key = sha1(code_binary(name_id)).hexdigest()
         for item in self.assertion.find({"name_id_key": key}):
             assertion = from_dict(item["assertion"], ONTS, True)
             if session_index or requested_context:
@@ -113,7 +114,7 @@ class SessionStorageMDB(object):
 
     def remove_authn_statements(self, name_id):
         logger.debug("remove authn about: %s" % name_id)
-        key = sha1(code(name_id)).hexdigest()
+        key = sha1(code_binary(name_id)).hexdigest()
         for item in self.assertion.find({"name_id_key": key}):
             self.assertion.remove(item["_id"])
 
@@ -324,14 +325,14 @@ def protect(dic):
     res = {}
     for key, val in dic.items():
         key = key.replace(".", "__")
-        if isinstance(val, basestring):
+        if isinstance(val, six.string_types):
             pass
         elif isinstance(val, dict):
             val = protect(val)
         elif isinstance(val, list):
             li = []
             for va in val:
-                if isinstance(va, basestring):
+                if isinstance(va, six.string_types):
                     pass
                 elif isinstance(va, dict):
                     va = protect(va)
@@ -349,14 +350,14 @@ def unprotect(dic):
             pass
         else:
             key = key.replace("__", ".")
-        if isinstance(val, basestring):
+        if isinstance(val, six.string_types):
             pass
         elif isinstance(val, dict):
             val = unprotect(val)
         elif isinstance(val, list):
             li = []
             for va in val:
-                if isinstance(va, basestring):
+                if isinstance(va, six.string_types):
                     pass
                 elif isinstance(val, dict):
                     va = unprotect(va)
@@ -377,9 +378,9 @@ def export_mdstore_to_mongo_db(mds, database, collection, sub_collection=""):
         mdb.store(key, **kwargs)
 
 
-class MetadataMDB(MetaData):
+class MetadataMDB(InMemoryMetaData):
     def __init__(self, onts, attrc, database="", collection=""):
-        MetaData.__init__(self, onts, attrc)
+        super(MetadataMDB, self).__init__(onts, attrc)
         self.mdb = MDB(database, collection)
         self.mdb.primary_key = "entity_id"
 

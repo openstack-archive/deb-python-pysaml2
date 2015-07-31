@@ -1,23 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2009-2011 Umeå University
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#            http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-""" 
-Implements some usefull functions when dealing with validity of 
+"""
+Implements some usefull functions when dealing with validity of
 different types of information.
 """
+from __future__ import print_function
 
 import calendar
 import re
@@ -26,15 +14,16 @@ import sys
 
 from datetime import timedelta
 from datetime import datetime
+import six
 
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 TIME_FORMAT_WITH_FRAGMENT = re.compile(
-    "^(\d{4,4}-\d{2,2}-\d{2,2}T\d{2,2}:\d{2,2}:\d{2,2})\.\d*Z$")
+    "^(\d{4,4}-\d{2,2}-\d{2,2}T\d{2,2}:\d{2,2}:\d{2,2})(\.\d*)?Z?$")
 
 # ---------------------------------------------------------------------------
 # I'm sure this is implemented somewhere else can't find it now though, so I
 # made an attempt.
-#Implemented according to 
+#Implemented according to
 #http://www.w3.org/TR/2001/REC-xmlschema-2-20010502/
 #adding-durations-to-dateTimes
 
@@ -80,11 +69,12 @@ def parse_duration(duration):
         sign = '+'
     assert duration[index] == "P"
     index += 1
-    
-    dic = dict([(typ, 0) for (code, typ) in D_FORMAT])
-    
+
+    dic = dict([(typ, 0) for (code, typ) in D_FORMAT if typ])
+    dlen = len(duration)
+
     for code, typ in D_FORMAT:
-        #print duration[index:], code
+        #print(duration[index:], code)
         if duration[index] == '-':
             raise Exception("Negation not allowed on individual items")
         if code == "T":
@@ -94,34 +84,45 @@ def parse_duration(duration):
                     raise Exception("Not allowed to end with 'T'")
             else:
                 raise Exception("Missing T")
+        elif duration[index] == "T":
+            continue
         else:
             try:
                 mod = duration[index:].index(code)
+                _val = duration[index:index + mod]
                 try:
-                    dic[typ] = int(duration[index:index + mod])
+                    dic[typ] = int(_val)
                 except ValueError:
-                    if code == "S":
+                    # smallest value used may also have a decimal fraction
+                    if mod + index + 1 == dlen:
                         try:
-                            dic[typ] = float(duration[index:index + mod])
+                            dic[typ] = float(_val)
                         except ValueError:
-                            raise Exception("Not a float")
+                            if "," in _val:
+                                _val = _val.replace(",", ".")
+                                try:
+                                    dic[typ] = float(_val)
+                                except ValueError:
+                                    raise Exception("Not a float")
+                            else:
+                                raise Exception("Not a float")
                     else:
-                        raise Exception(
-                            "Fractions not allow on anything byt seconds")
+                        raise ValueError(
+                            "Fraction not allowed on other than smallest value")
                 index = mod + index + 1
             except ValueError:
                 dic[typ] = 0
 
-        if index == len(duration):
+        if index == dlen:
             break
-        
+
     return sign, dic
-    
+
 
 def add_duration(tid, duration):
-    
+
     (sign, dur) = parse_duration(duration)
-    
+
     if sign == '+':
         #Months
         temp = tid.tm_mon + dur["tm_mon"]
@@ -160,7 +161,7 @@ def add_duration(tid, duration):
             temp = month + carry
             month = modulo(temp, 1, 13)
             year += f_quotient(temp, 1, 13)
-    
+
         return time.localtime(time.mktime((year, month, days, hour, minutes,
                                            secs, 0, 0, -1)))
     else:
@@ -203,7 +204,7 @@ def in_a_while(days=0, seconds=0, microseconds=0, milliseconds=0,
     """
     if format is None:
         format = TIME_FORMAT
-        
+
     return time_in_a_while(days, seconds, microseconds, milliseconds,
                            minutes, hours, weeks).strftime(format)
 
@@ -242,8 +243,8 @@ def str_to_time(timestr, format=TIME_FORMAT):
     except ValueError:  # assume it's a format problem
         try:
             elem = TIME_FORMAT_WITH_FRAGMENT.match(timestr)
-        except Exception, exc:
-            print >> sys.stderr, "Exception: %s on %s" % (exc, timestr)
+        except Exception as exc:
+            print("Exception: %s on %s" % (exc, timestr), file=sys.stderr)
             raise
         then = time.strptime(elem.groups()[0] + "Z", TIME_FORMAT)
 
@@ -274,7 +275,7 @@ def before(point):
     if not point:
         return True
 
-    if isinstance(point, basestring):
+    if isinstance(point, six.string_types):
         point = str_to_time(point)
     elif isinstance(point, int):
         point = time.gmtime(point)
@@ -302,14 +303,18 @@ valid = before
 
 def later_than(after, before):
     """ True if then is later or equal to that """
-    if isinstance(after, basestring):
+    if isinstance(after, six.string_types):
         after = str_to_time(after)
     elif isinstance(after, int):
         after = time.gmtime(after)
 
-    if isinstance(before, basestring):
+    if isinstance(before, six.string_types):
         before = str_to_time(before)
     elif isinstance(before, int):
         before = time.gmtime(before)
 
+    if before is None:
+        return True
+    if after is None:
+        return False
     return after >= before

@@ -2,7 +2,7 @@ import logging
 
 from hashlib import sha1
 
-from saml2.ident import code
+from saml2.ident import code_binary
 
 from saml2 import md
 from saml2 import saml
@@ -11,8 +11,8 @@ from saml2.extension import idpdisc
 from saml2.extension import dri
 from saml2.extension import mdattr
 from saml2.extension import ui
-import xmldsig
-import xmlenc
+from saml2 import xmldsig
+from saml2 import xmlenc
 
 
 ONTS = {
@@ -49,7 +49,7 @@ class SessionStorage(object):
 
     def store_assertion(self, assertion, to_sign):
         self.assertion[assertion.id] = (assertion, to_sign)
-        key = sha1(code(assertion.subject.name_id)).hexdigest()
+        key = sha1(code_binary(assertion.subject.name_id)).hexdigest()
         try:
             self.authn[key].append(assertion.authn_statement)
         except KeyError:
@@ -68,7 +68,7 @@ class SessionStorage(object):
         :return:
         """
         result = []
-        key = sha1(code(name_id)).hexdigest()
+        key = sha1(code_binary(name_id)).hexdigest()
         try:
             statements = self.authn[key]
         except KeyError:
@@ -89,6 +89,6 @@ class SessionStorage(object):
 
     def remove_authn_statements(self, name_id):
         logger.debug("remove authn about: %s" % name_id)
-        nkey = sha1(code(name_id)).hexdigest()
+        nkey = sha1(code_binary(name_id)).hexdigest()
 
         del self.authn[nkey]

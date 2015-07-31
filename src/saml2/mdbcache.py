@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 import logging
+from pymongo.mongo_client import MongoClient
 
 __author__ = 'rolandh'
 
-from pymongo import Connection
 #import cjson
 import time
 from datetime import datetime
@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 class Cache(object):
     def __init__(self, server=None, debug=0, db=None):
         if server:
-            connection = Connection(server)
+            connection = MongoClient(server)
         else:
-            connection = Connection()
+            connection = MongoClient()
 
         if db:
             self._db = connection[db]
@@ -78,7 +78,7 @@ class Cache(object):
                         res[key] = vals
 
         return res, oldees
-                
+
     def _get_info(self, item, check_not_on_or_after=True):
         """ Get session information about a subject gotten from a
         specified IdP/AA.

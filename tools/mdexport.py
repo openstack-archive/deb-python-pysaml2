@@ -12,8 +12,8 @@ from saml2.extension import mdrpi
 from saml2.extension import mdui
 from saml2.extension import shibmd
 from saml2.extension import ui
-import xmldsig
-import xmlenc
+from saml2 import xmldsig
+from saml2 import xmlenc
 
 import argparse
 
@@ -65,7 +65,7 @@ elif args.type == "external":
     metad = MetaDataExtern(ONTS.values(), ATTRCONV, args.url,
                            sc, cert=args.cert, http=httpc)
 
-if metad:
+if metad is not None:
     metad.load()
     txt = metad.dumps()
     if args.output:
@@ -73,4 +73,4 @@ if metad:
         f.write(txt)
         f.close()
     else:
-        print txt
+        print(txt)

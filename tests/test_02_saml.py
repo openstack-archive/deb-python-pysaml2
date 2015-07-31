@@ -1,19 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2010 Umeå University.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#            http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 """Tests for saml2.saml"""
 
@@ -25,9 +12,10 @@ except ImportError:
     from elementtree import ElementTree
 
 import saml2
-import saml2_data, ds_data
+import saml2_data
+import ds_data
 
-import xmldsig as ds
+from saml2 import xmldsig as ds
 
 from saml2 import saml
 
@@ -52,7 +40,7 @@ class TestExtensionElement:
         ee.loadd(ava)
 
         del ava["tag"]
-        print ava
+        print(ava)
         ee = saml2.ExtensionElement("")
 
         raises(KeyError, "ee.loadd(ava)")
@@ -156,7 +144,7 @@ class TestExtensionContainer:
                 }]
 
         ees = [saml2.ExtensionElement("").loadd(a) for a in avas]
-        print ees
+        print(ees)
         ec = saml2.ExtensionContainer(extension_elements=ees)
         esl = ec.find_extensions(tag="tag2")
         assert len(esl) == 1
@@ -195,7 +183,7 @@ class TestExtensionContainer:
         ec = saml2.ExtensionContainer()
         ec.add_extension_attribute("foo", "bar")
         assert len(ec.extension_attributes) == 1
-        assert ec.extension_attributes.keys()[0] == "foo"
+        assert list(ec.extension_attributes.keys())[0] == "foo"
 
 
 class TestSAMLBase:
@@ -207,7 +195,7 @@ class TestSAMLBase:
         }
 
         foo = saml2.make_vals(ava, Issuer, part=True)
-        print foo
+        print(foo)
         assert foo.format == NAMEID_FORMAT_EMAILADDRESS
         assert foo.sp_name_qualifier == "loa"
         assert foo.text == "free text"
@@ -216,7 +204,7 @@ class TestSAMLBase:
         ava = "free text"
 
         foo = saml2.make_vals(ava, Issuer, part=True)
-        print foo
+        print(foo)
         assert foo.keyswv() == ["text"]
         assert foo.text == "free text"
 
@@ -228,16 +216,17 @@ class TestSAMLBase:
 
         attr = Attribute()
         saml2.make_vals(ava, AttributeValue, attr, prop="attribute_value")
-        assert attr.keyswv() == ["attribute_value"]
+        assert sorted(attr.keyswv()) == sorted(["name_format",
+                                                "attribute_value"])
         assert len(attr.attribute_value) == 4
 
     def test_to_string_nspair(self):
         foo = saml2.make_vals("lions", AttributeValue, part=True)
-        txt = foo.to_string()
-        nsstr = foo.to_string({"saml": saml.NAMESPACE})
+        txt = foo.to_string().decode('utf-8')
+        nsstr = foo.to_string({"saml": saml.NAMESPACE}).decode('utf-8')
         assert nsstr != txt
-        print txt
-        print nsstr
+        print(txt)
+        print(nsstr)
         assert "saml:AttributeValue" in nsstr
         assert "saml:AttributeValue" not in txt
 
@@ -689,28 +678,28 @@ class TestAttribute:
 
     def test_basic_str(self):
         attribute = saml.attribute_from_string(BASIC_STR_AV)
-        print attribute
+        print(attribute)
         assert attribute.attribute_value[0].text.strip() == "By-Tor"
 
     def test_basic_int(self):
         attribute = saml.attribute_from_string(BASIC_INT_AV)
-        print attribute
+        print(attribute)
         assert attribute.attribute_value[0].text == "23"
 
     def test_basic_base64(self):
         attribute = saml.attribute_from_string(BASIC_BASE64_AV)
-        print attribute
+        print(attribute)
         assert attribute.attribute_value[0].text == "VU5JTkVUVA=="
         assert attribute.attribute_value[0].get_type() == "xs:base64Binary"
 
     def test_basic_boolean_true(self):
         attribute = saml.attribute_from_string(BASIC_BOOLEAN_TRUE_AV)
-        print attribute
+        print(attribute)
         assert attribute.attribute_value[0].text.lower() == "true"
 
     def test_basic_boolean_false(self):
         attribute = saml.attribute_from_string(BASIC_BOOLEAN_FALSE_AV)
-        print attribute
+        print(attribute)
         assert attribute.attribute_value[0].text.lower() == "false"
 
 
@@ -1102,7 +1091,7 @@ class TestEvidence:
         self.evidence.assertion.append(saml.Assertion())
         self.evidence.encrypted_assertion.append(saml.EncryptedAssertion())
         new_evidence = saml.evidence_from_string(self.evidence.to_string())
-        print new_evidence
+        print(new_evidence)
         assert self.evidence.to_string() == new_evidence.to_string()
         assert isinstance(new_evidence.assertion_id_ref[0],
                           saml.AssertionIDRef)
@@ -1224,3 +1213,7 @@ class TestAssertion:
         """Test assertion_from_string() using test data"""
         # TODO
         pass
+
+if __name__ == "__main__":
+    t = TestSAMLBase()
+    t.test_make_vals_multi_dict()

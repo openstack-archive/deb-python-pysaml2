@@ -11,8 +11,9 @@ from saml2.validate import valid_domain_name
 import saml2
 from saml2 import SamlBase
 
-import xmldsig as ds
-import xmlenc as xenc
+import six
+from saml2 import xmldsig as ds
+from saml2 import xmlenc as xenc
 
 NAMESPACE = 'urn:oasis:names:tc:SAML:2.0:assertion'
 
@@ -24,8 +25,8 @@ XSI_NIL = '{%s}nil' % XSI_NAMESPACE
 
 NAMEID_FORMAT_EMAILADDRESS = (
     "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress")
-#NAMEID_FORMAT_UNSPECIFIED1 = (
-#    "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified")
+NAMEID_FORMAT_UNSPECIFIED1 = (
+    "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified")
 NAMEID_FORMAT_UNSPECIFIED = (
     "urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified")
 NAMEID_FORMAT_ENCRYPTED = (
@@ -36,7 +37,14 @@ NAMEID_FORMAT_TRANSIENT = (
     "urn:oasis:names:tc:SAML:2.0:nameid-format:transient")
 NAMEID_FORMAT_ENTITY = (
     "urn:oasis:names:tc:SAML:2.0:nameid-format:entity")
-
+NAMEID_FORMATS_SAML2 = (
+    ('NAMEID_FORMAT_EMAILADDRESS', NAMEID_FORMAT_EMAILADDRESS),
+    ('NAMEID_FORMAT_ENCRYPTED', NAMEID_FORMAT_ENCRYPTED),
+    ('NAMEID_FORMAT_ENTITY', NAMEID_FORMAT_ENTITY),
+    ('NAMEID_FORMAT_PERSISTENT', NAMEID_FORMAT_PERSISTENT),
+    ('NAMEID_FORMAT_TRANSIENT', NAMEID_FORMAT_TRANSIENT),
+    ('NAMEID_FORMAT_UNSPECIFIED', NAMEID_FORMAT_UNSPECIFIED),
+)
 PROFILE_ATTRIBUTE_BASIC = (
     "urn:oasis:names:tc:SAML:2.0:profiles:attribute:basic")
 
@@ -48,7 +56,11 @@ NAME_FORMAT_UNSPECIFIED = (
     "urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified")
 NAME_FORMAT_URI = "urn:oasis:names:tc:SAML:2.0:attrname-format:uri"
 NAME_FORMAT_BASIC = "urn:oasis:names:tc:SAML:2.0:attrname-format:basic"
-
+NAME_FORMATS_SAML2 = (
+    ('NAME_FORMAT_BASIC', NAME_FORMAT_BASIC),
+    ('NAME_FORMAT_URI', NAME_FORMAT_URI),
+    ('NAME_FORMAT_UNSPECIFIED', NAME_FORMAT_UNSPECIFIED),
+)
 DECISION_TYPE_PERMIT = "Permit"
 DECISION_TYPE_DENY = "Deny"
 DECISION_TYPE_INDETERMINATE = "Indeterminate"
@@ -89,7 +101,7 @@ def _decode_attribute_value(typ, text):
 
 
 def _verify_value_type(typ, val):
-    #print "verify value type: %s, %s" % (typ, val)
+    #print("verify value type: %s, %s" % (typ, val))
     if typ == XSD + "string":
         try:
             return str(val)
@@ -107,7 +119,7 @@ def _verify_value_type(typ, val):
     if typ == XSD + "base64Binary":
         import base64
 
-        return base64.decodestring(val)
+        return base64.decodestring(val.encode('utf-8'))
 
 
 class AttributeValueBase(SamlBase):
@@ -181,7 +193,9 @@ class AttributeValueBase(SamlBase):
             val = base64.encodestring(val)
             self.set_type("xs:base64Binary")
         else:
-            if isinstance(val, basestring):
+            if isinstance(val, six.binary_type):
+                val = val.decode('utf-8')
+            if isinstance(val, six.string_types):
                 if not typ:
                     self.set_type("xs:string")
                 else:
@@ -239,13 +253,15 @@ class AttributeValueBase(SamlBase):
         # Fill in the instance members from the contents of the XML tree.
         for child in tree:
             self._convert_element_tree_to_member(child)
-        for attribute, value in tree.attrib.iteritems():
+        for attribute, value in iter(tree.attrib.items()):
             self._convert_element_attribute_to_member(attribute, value)
         if tree.text:
-            #print "set_text:", tree.text
+            #print("set_text:", tree.text)
             # clear type
             #self.clear_type()
             self.set_text(tree.text)
+            if XSI_NIL in self.extension_attributes:
+                del self.extension_attributes[XSI_NIL]
             try:
                 typ = self.extension_attributes[XSI_TYPE]
                 _verify_value_type(typ, getattr(self, "text"))
@@ -1027,7 +1043,7 @@ class AttributeType_(SamlBase):
     def __init__(self,
                  attribute_value=None,
                  name=None,
-                 name_format=None,
+                 name_format=NAME_FORMAT_URI,
                  friendly_name=None,
                  text=None,
                  extension_elements=None,

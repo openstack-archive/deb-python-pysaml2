@@ -1,14 +1,18 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import logging
 import re
 import argparse
+import os
+from saml2.extension.pefim import SPCertEnc
+from saml2.metadata import create_metadata_string
 import service_conf
 
 from Cookie import SimpleCookie
 from urlparse import parse_qs
 import sys
 
-from saml2 import BINDING_HTTP_REDIRECT
+from saml2 import BINDING_HTTP_REDIRECT, element_to_extension_element
 from saml2 import BINDING_SOAP
 from saml2 import time_util
 from saml2 import ecp
@@ -33,6 +37,8 @@ from saml2.s_utils import UnsupportedBinding
 from saml2.s_utils import sid
 from saml2.s_utils import rndstr
 #from srtest import exception_trace
+from saml2.samlp import Extensions
+import xmldsig as ds
 
 logger = logging.getLogger("")
 hdlr = logging.FileHandler('spx.log')
@@ -93,7 +99,7 @@ def dict_to_table(ava, lev=0, width=1):
 def handle_static(environ, start_response, path):
     """
     Creates a response for a static file. There might be a longer path
-    then just /static/... if so strip the path leading up to static.
+    then just /static/... - if so strip the path leading up to static.
 
     :param environ: wsgi enviroment
     :param start_response: wsgi start response
@@ -152,14 +158,17 @@ class Cache(object):
         self.uid2user = {}
         self.cookie_name = "spauthn"
         self.outstanding_queries = {}
+        self.outstanding_certs = {}
         self.relay_state = {}
         self.user = {}
         self.result = {}
 
-    def kaka2user(self, kaka):
-        logger.debug("KAKA: %s" % kaka)
-        if kaka:
-            cookie_obj = SimpleCookie(kaka)
+    def get_user(self, environ):
+        cookie = environ.get("HTTP_COOKIE", '')
+
+        logger.debug("Cookie: %s" % cookie)
+        if cookie:
+            cookie_obj = SimpleCookie(cookie)
             morsel = cookie_obj.get(self.cookie_name, None)
             if morsel:
                 try:
@@ -167,26 +176,26 @@ class Cache(object):
                 except KeyError:
                     return None
             else:
-                logger.debug("No spauthn cookie")
+                logger.debug("No %s cookie", self.cookie_name)
+
         return None
 
-    def delete_cookie(self, environ=None, kaka=None):
-        if not kaka:
-            kaka = environ.get("HTTP_COOKIE", '')
-        logger.debug("delete KAKA: %s" % kaka)
-        if kaka:
+    def delete_cookie(self, environ):
+        cookie = environ.get("HTTP_COOKIE", '')
+        logger.debug("delete cookie: %s" % cookie)
+        if cookie:
             _name = self.cookie_name
-            cookie_obj = SimpleCookie(kaka)
+            cookie_obj = SimpleCookie(cookie)
             morsel = cookie_obj.get(_name, None)
             cookie = SimpleCookie()
             cookie[_name] = ""
             cookie[_name]['path'] = "/"
             logger.debug("Expire: %s" % morsel)
-            cookie[_name]["expires"] = _expiration("dawn")
-            return tuple(cookie.output().split(": ", 1))
+            cookie[_name]["expires"] = _expiration("now")
+            return cookie.output().split(": ", 1)
         return None
 
-    def user2kaka(self, user):
+    def set_cookie(self, user):
         uid = rndstr(32)
         self.uid2user[uid] = user
         cookie = SimpleCookie()
@@ -194,7 +203,7 @@ class Cache(object):
         cookie[self.cookie_name]['path'] = "/"
         cookie[self.cookie_name]["expires"] = _expiration(480)
         logger.debug("Cookie expires: %s" % cookie[self.cookie_name]["expires"])
-        return tuple(cookie.output().split(": ", 1))
+        return cookie.output().split(": ", 1)
 
 
 # -----------------------------------------------------------------------------
@@ -318,6 +327,12 @@ class Service(object):
 # -----------------------------------------------------------------------------
 
 
+class User(object):
+    def __init__(self, name_id, data):
+        self.name_id = name_id
+        self.data = data
+
+
 class ACS(Service):
     def __init__(self, sp, environ, start_response, cache=None, **kwargs):
         Service.__init__(self, environ, start_response)
@@ -340,24 +355,31 @@ class ACS(Service):
 
         try:
             self.response = self.sp.parse_authn_request_response(
-                response, binding, self.outstanding_queries)
-        except UnknownPrincipal, excp:
+                response, binding, self.outstanding_queries, self.cache.outstanding_certs)
+        except UnknownPrincipal as excp:
             logger.error("UnknownPrincipal: %s" % (excp,))
             resp = ServiceError("UnknownPrincipal: %s" % (excp,))
             return resp(self.environ, self.start_response)
-        except UnsupportedBinding, excp:
+        except UnsupportedBinding as excp:
             logger.error("UnsupportedBinding: %s" % (excp,))
             resp = ServiceError("UnsupportedBinding: %s" % (excp,))
             return resp(self.environ, self.start_response)
-        except VerificationError, err:
+        except VerificationError as err:
             resp = ServiceError("Verification error: %s" % (err,))
             return resp(self.environ, self.start_response)
-        except Exception, err:
+        except Exception as err:
             resp = ServiceError("Other error: %s" % (err,))
             return resp(self.environ, self.start_response)
 
         logger.info("AVA: %s" % self.response.ava)
-        resp = Response(dict_to_table(self.response.ava))
+
+        user = User(self.response.name_id, self.response.ava)
+        cookie = self.cache.set_cookie(user)
+
+        resp = Redirect("/", headers=[
+            ("Location", "/"),
+            cookie,
+        ])
         return resp(self.environ, self.start_response)
 
     def verify_attributes(self, ava):
@@ -522,25 +544,52 @@ class SSO(object):
         logger.info("Chosen IdP: '%s'" % idp_entity_id)
         return 0, idp_entity_id
 
-    def redirect_to_auth(self, _cli, entity_id, came_from, vorg_name=""):
+    def redirect_to_auth(self, _cli, entity_id, came_from, sigalg=""):
         try:
+            # Picks a binding to use for sending the Request to the IDP
             _binding, destination = _cli.pick_binding(
                 "single_sign_on_service", self.bindings, "idpsso",
                 entity_id=entity_id)
             logger.debug("binding: %s, destination: %s" % (_binding,
                                                            destination))
-            req_id, req = _cli.create_authn_request(destination, vorg=vorg_name)
+            # Binding here is the response binding that is which binding the
+            # IDP should use to return the response.
+            acs = _cli.config.getattr("endpoints", "sp")[
+                "assertion_consumer_service"]
+            # just pick one
+            endp, return_binding = acs[0]
+
+            extensions = None
+            cert = None
+            if _cli.config.generate_cert_func is not None:
+                    cert_str, req_key_str = _cli.config.generate_cert_func()
+                    cert = {
+                        "cert": cert_str,
+                        "key": req_key_str
+                    }
+                    spcertenc = SPCertEnc(x509_data=ds.X509Data(
+                        x509_certificate=ds.X509Certificate(text=cert_str)))
+                    extensions = Extensions(extension_elements=[
+                        element_to_extension_element(spcertenc)])
+
+            req_id, req = _cli.create_authn_request(destination,
+                                                    binding=return_binding,
+                                                    extensions=extensions)
             _rstate = rndstr()
             self.cache.relay_state[_rstate] = came_from
             ht_args = _cli.apply_binding(_binding, "%s" % req, destination,
-                                         relay_state=_rstate)
-            _sid = req.id
-            logger.debug("ht_args: %s" % ht_args)
-        except Exception, exc:
+                                         relay_state=_rstate,
+                                         sigalg=sigalg)
+            _sid = req_id
+
+            if cert is not None:
+                self.cache.outstanding_certs[_sid] = cert
+
+        except Exception as exc:
             logger.exception(exc)
             resp = ServiceError(
                 "Failed to construct the AuthnRequest: %s" % exc)
-            return resp(self.environ, self.start_response)
+            return resp
 
         # remember the request
         self.cache.outstanding_queries[_sid] = came_from
@@ -552,14 +601,6 @@ class SSO(object):
         # Which page was accessed to get here
         came_from = geturl(self.environ)
         logger.debug("[sp.challenge] RelayState >> '%s'" % came_from)
-
-        # Am I part of a virtual organization or more than one ?
-        try:
-            vorg_name = _cli.vorg._name
-        except AttributeError:
-            vorg_name = ""
-
-        logger.debug("[sp.challenge] VO: %s" % vorg_name)
 
         # If more than one idp and if none is selected, I have to do wayf
         (done, response) = self._pick_idp(came_from)
@@ -575,9 +616,22 @@ class SSO(object):
         else:
             entity_id = response
             # Do the AuthnRequest
-            resp = self.redirect_to_auth(_cli, entity_id, came_from, vorg_name)
+            resp = self.redirect_to_auth(_cli, entity_id, came_from)
             return resp(self.environ, self.start_response)
 
+
+# ----------------------------------------------------------------------------
+
+
+class SLO(Service):
+    def __init__(self, sp, environ, start_response, cache=None):
+        Service.__init__(self, environ, start_response)
+        self.sp = sp
+        self.cache = cache
+
+    def do(self, response, binding, relay_state="", mtype="response"):
+        req_info = self.sp.parse_logout_request_response(response, binding)
+        return finish_logout(self.environ, self.start_response)
 
 # ----------------------------------------------------------------------------
 
@@ -593,15 +647,18 @@ def not_found(environ, start_response):
 
 
 #noinspection PyUnusedLocal
-def main(environ, start_response, _sp):
-    _sso = SSO(_sp, environ, start_response, cache=CACHE, **ARGS)
-    return _sso.do()
+def main(environ, start_response, sp):
+    user = CACHE.get_user(environ)
 
+    if user is None:
+        sso = SSO(sp, environ, start_response, cache=CACHE, **ARGS)
+        return sso.do()
 
-#noinspection PyUnusedLocal
-def verify_login_cookie(environ, start_response, _sp):
-    _sso = SSO(_sp, environ, start_response, cache=CACHE, **ARGS)
-    return _sso.do()
+    body = dict_to_table(user.data)
+    body += '<br><a href="/logout">logout</a>'
+
+    resp = Response(body)
+    return resp(environ, start_response)
 
 
 def disco(environ, start_response, _sp):
@@ -619,13 +676,67 @@ def disco(environ, start_response, _sp):
 
 # ----------------------------------------------------------------------------
 
+
+#noinspection PyUnusedLocal
+def logout(environ, start_response, sp):
+    user = CACHE.get_user(environ)
+
+    if user is None:
+        sso = SSO(sp, environ, start_response, cache=CACHE, **ARGS)
+        return sso.do()
+
+    logger.info("[logout] subject_id: '%s'" % (user.name_id,))
+
+    # What if more than one
+    data = sp.global_logout(user.name_id)
+    logger.info("[logout] global_logout > %s" % data)
+
+    for entity_id, logout_info in data.items():
+        if isinstance(logout_info, tuple):
+            binding, http_info = logout_info
+
+            if binding == BINDING_HTTP_POST:
+                body = ''.join(http_info['data'])
+                resp = Response(body)
+                return resp(environ, start_response)
+            elif binding == BINDING_HTTP_REDIRECT:
+                for key, value in http_info['headers']:
+                    if key.lower() == 'location':
+                        resp = Redirect(value)
+                        return resp(environ, start_response)
+
+                resp = ServiceError('missing Location header')
+                return resp(environ, start_response)
+            else:
+                resp = ServiceError('unknown logout binding: %s', binding)
+                return resp(environ, start_response)
+        else:  # result from logout, should be OK
+            pass
+
+    return finish_logout(environ, start_response)
+
+
+def finish_logout(environ, start_response):
+    logger.info("[logout done] environ: %s" % environ)
+    logger.info("[logout done] remaining subjects: %s" % CACHE.uid2user.values())
+
+    # remove cookie and stored info
+    cookie = CACHE.delete_cookie(environ)
+
+    resp = Response('You are now logged out of this service', headers=[
+      cookie,
+    ])
+    return resp(environ, start_response)
+
+# ----------------------------------------------------------------------------
+
 # map urls to functions
 urls = [
     # Hmm, place holder, NOT used
     ('place', ("holder", None)),
     (r'^$', main),
-    (r'^login', verify_login_cookie),
-    (r'^disco', disco)
+    (r'^disco', disco),
+    (r'^logout$', logout),
 ]
 
 
@@ -637,15 +748,37 @@ def add_urls():
     urls.append(("%s/redirect$" % base, (ACS, "redirect", SP)))
     urls.append(("%s/redirect/(.*)$" % base, (ACS, "redirect", SP)))
 
+    base = "slo"
+
+    urls.append(("%s/post$" % base, (SLO, "post", SP)))
+    urls.append(("%s/post/(.*)$" % base, (SLO, "post", SP)))
+    urls.append(("%s/redirect$" % base, (SLO, "redirect", SP)))
+    urls.append(("%s/redirect/(.*)$" % base, (SLO, "redirect", SP)))
+
 # ----------------------------------------------------------------------------
 
+def metadata(environ, start_response):
+    try:
+        path = _args.path
+        if path is None or len(path) == 0:
+            path = os.path.dirname(os.path.abspath( __file__ ))
+        if path[-1] != "/":
+            path += "/"
+        metadata = create_metadata_string(path+"sp_conf.py", None,
+                                          _args.valid, _args.cert, _args.keyfile,
+                                          _args.id, _args.name, _args.sign)
+        start_response('200 OK', [('Content-Type', "text/xml")])
+        return metadata
+    except Exception as ex:
+        logger.error("An error occured while creating metadata:" + ex.message)
+        return not_found(environ, start_response)
 
 def application(environ, start_response):
     """
     The main WSGI application. Dispatch the current request to
     the functions from above.
 
-    If nothing matches call the `not_found` function.
+    If nothing matches, call the `not_found` function.
     
     :param environ: The HTTP application environment
     :param start_response: The application to run when the handling of the 
@@ -654,6 +787,9 @@ def application(environ, start_response):
     """
     path = environ.get('PATH_INFO', '').lstrip('/')
     logger.debug("<application> PATH: '%s'" % path)
+
+    if path == "metadata":
+        return metadata(environ, start_response)
 
     logger.debug("Finding callback to run")
     try:
@@ -670,26 +806,27 @@ def application(environ, start_response):
         if re.match(".*static/.*", path):
             return handle_static(environ, start_response, path)
         return not_found(environ, start_response)
-    except StatusError, err:
+    except StatusError as err:
         logging.error("StatusError: %s" % err)
         resp = BadRequest("%s" % err)
         return resp(environ, start_response)
-    except Exception, err:
+    except Exception as err:
         #_err = exception_trace("RUN", err)
         #logging.error(exception_trace("RUN", _err))
-        print >> sys.stderr, err
+        print(err, file=sys.stderr)
         resp = ServiceError("%s" % err)
         return resp(environ, start_response)
 
 # ----------------------------------------------------------------------------
 
+HOST = service_conf.HOST
 PORT = service_conf.PORT
 # ------- HTTPS -------
 # These should point to relevant files
 SERVER_CERT = service_conf.SERVER_CERT
 SERVER_KEY = service_conf.SERVER_KEY
 # This is of course the certificate chain for the CA that signed
-# you cert and all the way up to the top
+# your cert and all the way up to the top
 CERT_CHAIN = service_conf.CERT_CHAIN
 
 if __name__ == '__main__':
@@ -706,6 +843,18 @@ if __name__ == '__main__':
     _parser.add_argument('-W', dest='wayf', action='store_true',
                          help="Which WAYF url to use")
     _parser.add_argument("config", help="SAML client config")
+    _parser.add_argument('-p', dest='path', help='Path to configuration file.')
+    _parser.add_argument('-v', dest='valid', default="4",
+                         help="How long, in days, the metadata is valid from the time of creation")
+    _parser.add_argument('-c', dest='cert', help='certificate')
+    _parser.add_argument('-i', dest='id',
+                         help="The ID of the entities descriptor in the metadata")
+    _parser.add_argument('-k', dest='keyfile',
+                         help="A file with a key to sign the metadata with")
+    _parser.add_argument('-n', dest='name')
+    _parser.add_argument('-S', dest='sign', action='store_true',
+                         help="sign the metadata")
+
 
     ARGS = {}
     _args = _parser.parse_args()
@@ -727,13 +876,15 @@ if __name__ == '__main__':
 
     add_urls()
 
-    SRV = wsgiserver.CherryPyWSGIServer(('0.0.0.0', PORT), application)
+    SRV = wsgiserver.CherryPyWSGIServer((HOST, PORT), application)
 
+    _https = ""
     if service_conf.HTTPS:
         SRV.ssl_adapter = ssl_pyopenssl.pyOpenSSLAdapter(SERVER_CERT,
                                                          SERVER_KEY, CERT_CHAIN)
+        _https = " using SSL/TLS"
     logger.info("Server starting")
-    print "SP listening on port: %s" % PORT
+    print("SP listening on %s:%s%s" % (HOST, PORT, _https))
     try:
         SRV.start()
     except KeyboardInterrupt:

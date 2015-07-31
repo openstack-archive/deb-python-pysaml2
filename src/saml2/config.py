@@ -8,6 +8,7 @@ import os
 import re
 import logging
 import logging.handlers
+import six
 
 from importlib import import_module
 
@@ -31,8 +32,8 @@ from saml2.extension import idpdisc
 from saml2.extension import dri
 from saml2.extension import mdattr
 from saml2.extension import ui
-import xmldsig
-import xmlenc
+from saml2 import xmldsig
+from saml2 import xmlenc
 
 
 ONTS = {
@@ -48,8 +49,8 @@ ONTS = {
 }
 
 COMMON_ARGS = [
-    "entityid", "xmlsec_binary", "debug", "key_file", "cert_file",
-    "encryption_type", "secret", "accepted_time_diff", "name", "ca_certs",
+    "entityid", "xmlsec_binary", "debug", "key_file", "cert_file", "encryption_keypairs", "additional_cert_files",
+    "metadata_key_usage", "secret", "accepted_time_diff", "name", "ca_certs",
     "description", "valid_for", "verify_ssl_cert",
     "organization",
     "contact_person",
@@ -67,11 +68,13 @@ COMMON_ARGS = [
     "cert_handler_extra_class",
     "generate_cert_func",
     "generate_cert_info",
-    "verify_encrypt_cert",
+    "verify_encrypt_cert_advice",
+    "verify_encrypt_cert_assertion",
     "tmp_cert_file",
     "tmp_key_file",
     "validate_certificate",
-    "extensions"
+    "extensions",
+    "allow_unknown_attributes"
 ]
 
 SP_ARGS = [
@@ -90,13 +93,14 @@ SP_ARGS = [
     "allow_unsolicited",
     "ecp",
     "name_id_format",
-    "allow_unknown_attributes"
 ]
 
 AA_IDP_ARGS = [
     "sign_assertion",
     "sign_response",
     "encrypt_assertion",
+    "encrypted_advice_attributes",
+    "encrypt_assertion_self_contained",
     "want_authn_requests_signed",
     "want_authn_requests_only_with_valid_cert",
     "provided_attributes",
@@ -116,14 +120,17 @@ PDP_ARGS = ["endpoints", "name_form", "name_id_format"]
 
 AQ_ARGS = ["endpoints"]
 
+AA_ARGS = ["attribute", "attribute_profile"]
+
 COMPLEX_ARGS = ["attribute_converters", "metadata", "policy"]
-ALL = set(COMMON_ARGS + SP_ARGS + AA_IDP_ARGS + PDP_ARGS + COMPLEX_ARGS)
+ALL = set(COMMON_ARGS + SP_ARGS + AA_IDP_ARGS + PDP_ARGS + COMPLEX_ARGS +
+          AA_ARGS)
 
 SPEC = {
     "": COMMON_ARGS + COMPLEX_ARGS,
     "sp": COMMON_ARGS + COMPLEX_ARGS + SP_ARGS,
     "idp": COMMON_ARGS + COMPLEX_ARGS + AA_IDP_ARGS,
-    "aa": COMMON_ARGS + COMPLEX_ARGS + AA_IDP_ARGS,
+    "aa": COMMON_ARGS + COMPLEX_ARGS + AA_IDP_ARGS + AA_ARGS,
     "pdp": COMMON_ARGS + COMPLEX_ARGS + PDP_ARGS,
     "aq": COMMON_ARGS + COMPLEX_ARGS + AQ_ARGS,
 }
@@ -183,7 +190,9 @@ class Config(object):
         self.debug = False
         self.key_file = None
         self.cert_file = None
-        self.encryption_type = 'both'
+        self.encryption_keypairs = None
+        self.additional_cert_files = None
+        self.metadata_key_usage = 'both'
         self.secret = None
         self.accepted_time_diff = None
         self.name = None
@@ -213,15 +222,19 @@ class Config(object):
         self.crypto_backend = 'xmlsec1'
         self.scope = ""
         self.allow_unknown_attributes = False
+        self.allow_unsolicited = False
         self.extension_schema = {}
         self.cert_handler_extra_class = None
-        self.verify_encrypt_cert = None
+        self.verify_encrypt_cert_advice = None
+        self.verify_encrypt_cert_assertion = None
         self.generate_cert_func = None
         self.generate_cert_info = None
         self.tmp_cert_file = None
         self.tmp_key_file = None
         self.validate_certificate = None
         self.extensions = {}
+        self.attribute = []
+        self.attribute_profile = []
 
     def setattr(self, context, attr, val):
         if context == "":
@@ -269,7 +282,8 @@ class Config(object):
                 acs = ac_factory()
 
             if not acs:
-                raise ConfigurationError("No attribute converters, something is wrong!!")
+                raise ConfigurationError(
+                    "No attribute converters, something is wrong!!")
 
             _acs = self.getattr("attribute_converters", typ)
             if _acs:
@@ -289,7 +303,7 @@ class Config(object):
 
     def unicode_convert(self, item):
         try:
-            return unicode(item, "utf-8")
+            return six.text_type(item, "utf-8")
         except TypeError:
             _uc = self.unicode_convert
             if isinstance(item, dict):
@@ -385,7 +399,7 @@ class Config(object):
             disable_validation = False
 
         mds = MetadataStore(
-            ONTS.values(), acs, self, ca_certs,
+            list(ONTS.values()), acs, self, ca_certs,
             disable_ssl_certificate_validation=disable_validation)
 
         mds.imp(metadata_conf)
@@ -394,9 +408,9 @@ class Config(object):
 
     def endpoint(self, service, binding=None, context=None):
         """ Goes through the list of endpoint specifications for the
-        given type of service and returnes the first endpoint that matches
-        the given binding. If no binding is given any endpoint for that
-        service will be returned.
+        given type of service and returns a list of endpoint that matches
+        the given binding. If no binding is given all endpoints available for
+        that service will be returned.
 
         :param service: The service the endpoint should support
         :param binding: The expected binding
@@ -458,7 +472,7 @@ class Config(object):
 
         handler.setFormatter(formatter)
         return handler
-    
+
     def setup_logger(self):
         if root_logger.level != logging.NOTSET:  # Someone got there before me
             return root_logger
@@ -521,7 +535,7 @@ class SPConfig(Config):
 
 class IdPConfig(Config):
     def_context = "idp"
-    
+
     def __init__(self):
         Config.__init__(self)
 

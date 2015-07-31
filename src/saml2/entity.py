@@ -1,37 +1,44 @@
 import base64
-from binascii import hexlify
+#from binascii import hexlify
+import copy
 import logging
 from hashlib import sha1
+from Crypto.PublicKey import RSA
+import requests
+import six
 from saml2.metadata import ENDPOINTS
 from saml2.profile import paos, ecp
 from saml2.soap import parse_soap_enveloped_saml_artifact_resolve
 from saml2.soap import class_instances_from_soap_enveloped_saml_thingies
 from saml2.soap import open_soap_envelope
 
-from saml2 import samlp, SamlBase, SAMLError
+from saml2 import samlp
+from saml2 import SamlBase
+from saml2 import SAMLError
 from saml2 import saml
-from saml2 import response
+from saml2 import response as saml_response
 from saml2 import BINDING_URI
 from saml2 import BINDING_HTTP_ARTIFACT
 from saml2 import BINDING_PAOS
-from saml2 import request
+from saml2 import request as saml_request
 from saml2 import soap
 from saml2 import element_to_extension_element
 from saml2 import extension_elements_to_elements
 
-from saml2.saml import NameID
+from saml2.saml import NameID, EncryptedAssertion
 from saml2.saml import Issuer
 from saml2.saml import NAMEID_FORMAT_ENTITY
 from saml2.response import LogoutResponse
+from saml2.response import UnsolicitedResponse
 from saml2.time_util import instant
 from saml2.s_utils import sid
 from saml2.s_utils import UnravelError
 from saml2.s_utils import error_status_factory
-from saml2.s_utils import rndstr
+from saml2.s_utils import rndbytes
 from saml2.s_utils import success_status_factory
 from saml2.s_utils import decode_base64_and_inflate
 from saml2.s_utils import UnsupportedBinding
-from saml2.samlp import AuthnRequest
+from saml2.samlp import AuthnRequest, SessionIndex, response_from_string
 from saml2.samlp import AuthzDecisionQuery
 from saml2.samlp import AuthnQuery
 from saml2.samlp import AssertionIDRequest
@@ -58,6 +65,7 @@ from saml2.sigver import CryptoBackendXmlSec1
 from saml2.sigver import make_temp
 from saml2.sigver import pre_encryption_part
 from saml2.sigver import pre_signature_part
+from saml2.sigver import pre_encrypt_assertion
 from saml2.sigver import signed_instance_factory
 from saml2.virtual_org import VirtualOrg
 
@@ -65,7 +73,7 @@ logger = logging.getLogger(__name__)
 
 __author__ = 'rolandh'
 
-ARTIFACT_TYPECODE = '\x00\x04'
+ARTIFACT_TYPECODE = b'\x00\x04'
 
 SERVICE2MESSAGE = {
     "single_sign_on_service": AuthnRequest,
@@ -95,11 +103,17 @@ def create_artifact(entity_id, message_handle, endpoint_index=0):
     :param endpoint_index:
     :return:
     """
+    if not isinstance(entity_id, six.binary_type):
+        entity_id = entity_id.encode('utf-8')
     sourceid = sha1(entity_id)
 
-    ter = "%s%.2x%s%s" % (ARTIFACT_TYPECODE, endpoint_index,
-                          sourceid.digest(), message_handle)
-    return base64.b64encode(ter)
+    if not isinstance(message_handle, six.binary_type):
+        message_handle = message_handle.encode('utf-8')
+    ter = b"".join((ARTIFACT_TYPECODE, 
+                    ("%.2x" % endpoint_index).encode('ascii'),
+                    sourceid.digest(),
+                    message_handle))
+    return base64.b64encode(ter).decode('ascii')
 
 
 class Entity(HTTPBase):
@@ -115,6 +129,26 @@ class Entity(HTTPBase):
         else:
             raise SAMLError("Missing configuration")
 
+        for item in ["cert_file", "key_file", "ca_certs"]:
+            _val = getattr(self.config, item, None)
+            if not _val:
+                continue
+
+            if _val.startswith("http"):
+                r = requests.request("GET", _val)
+                if r.status_code == 200:
+                    _, filename = make_temp(r.text, ".pem", False)
+                    setattr(self.config, item, filename)
+                else:
+                    raise Exception(
+                        "Could not fetch certificate from %s" % _val)
+
+        try:
+            self.signkey = RSA.importKey(
+                open(self.config.getattr("key_file", ""), 'r').read())
+        except (KeyError, TypeError):
+            self.signkey = None
+
         HTTPBase.__init__(self, self.config.verify_ssl_cert,
                           self.config.ca_certs, self.config.key_file,
                           self.config.cert_file)
@@ -126,12 +160,11 @@ class Entity(HTTPBase):
         self.metadata = self.config.metadata
         self.config.setup_logger()
         self.debug = self.config.debug
-        self.seed = rndstr(32)
 
         self.sec = security_context(self.config)
 
         if virtual_organization:
-            if isinstance(virtual_organization, basestring):
+            if isinstance(virtual_organization, six.string_types):
                 self.vorg = self.config.vorg[virtual_organization]
             elif isinstance(virtual_organization, VirtualOrg):
                 self.vorg = virtual_organization
@@ -156,7 +189,7 @@ class Entity(HTTPBase):
                           format=NAMEID_FORMAT_ENTITY)
 
     def apply_binding(self, binding, msg_str, destination="", relay_state="",
-                      response=False, sign=False):
+                      response=False, sign=False, **kwargs):
         """
         Construct the necessary HTTP arguments dependent on Binding
 
@@ -166,6 +199,7 @@ class Entity(HTTPBase):
         :param destination: Where to send the message
         :param relay_state: Relay_state if provided
         :param response: Which type of message this is
+        :param kwargs: response type specific arguments
         :return: A dictionary
         """
         # unless if BINDING_HTTP_ARTIFACT
@@ -182,11 +216,12 @@ class Entity(HTTPBase):
             info["method"] = "GET"
         elif binding == BINDING_HTTP_REDIRECT:
             logger.info("HTTP REDIRECT")
-            info = self.use_http_get(msg_str, destination, relay_state, typ)
+            info = self.use_http_get(msg_str, destination, relay_state, typ,
+                                     **kwargs)
             info["url"] = str(destination)
             info["method"] = "GET"
         elif binding == BINDING_SOAP or binding == BINDING_PAOS:
-            info = self.use_soap(msg_str, destination, sign=sign)
+            info = self.use_soap(msg_str, destination, sign=sign, **kwargs)
         elif binding == BINDING_URI:
             info = self.use_http_uri(msg_str, typ, destination)
         elif binding == BINDING_HTTP_ARTIFACT:
@@ -209,7 +244,10 @@ class Entity(HTTPBase):
         sfunc = getattr(self.metadata, service)
 
         if bindings is None:
-            bindings = self.config.preferred_binding[service]
+            if request and request.protocol_binding:
+                bindings = [request.protocol_binding]
+            else:
+                bindings = self.config.preferred_binding[service]
 
         if not descr_type:
             if self.entity_type == "sp":
@@ -217,11 +255,31 @@ class Entity(HTTPBase):
             else:
                 descr_type = "spsso"
 
+        _url = _index = None
+        if request:
+            try:
+                _url = getattr(request, "%s_url" % service)
+            except AttributeError:
+                _url = None
+                try:
+                    _index = getattr(request, "%s_index" % service)
+                except AttributeError:
+                    pass
+
         for binding in bindings:
             try:
                 srvs = sfunc(entity_id, binding, descr_type)
                 if srvs:
-                    return binding, destinations(srvs)[0]
+                    if _url:
+                        for srv in srvs:
+                            if srv["location"] == _url:
+                                return binding, _url
+                    elif _index:
+                        for srv in srvs:
+                            if srv["index"] == _index:
+                                return binding, srv["location"]
+                    else:
+                        return binding, destinations(srvs)[0]
             except UnsupportedBinding:
                 pass
 
@@ -231,11 +289,11 @@ class Entity(HTTPBase):
         #logger.error("Bindings: %s" % bindings)
         #logger.error("Entities: %s" % self.metadata)
 
-        raise SAMLError("Unkown entity or unsupported bindings")
+        raise SAMLError("Unknown entity or unsupported bindings")
 
     def message_args(self, message_id=0):
         if not message_id:
-            message_id = sid(self.seed)
+            message_id = sid()
 
         return {"id": message_id, "version": VERSION,
                 "issue_instant": instant(), "issuer": self._issuer()}
@@ -295,7 +353,16 @@ class Entity(HTTPBase):
 
         return info
 
-    def unravel(self, txt, binding, msgtype="response"):
+    @staticmethod
+    def unravel(txt, binding, msgtype="response"):
+        """
+        Will unpack the received text. Depending on the context the original
+         response may have been transformed before transmission.
+        :param txt:
+        :param binding:
+        :param msgtype:
+        :return:
+        """
         #logger.debug("unravel '%s'" % txt)
         if binding not in [BINDING_HTTP_REDIRECT, BINDING_HTTP_POST,
                            BINDING_SOAP, BINDING_URI, BINDING_HTTP_ARTIFACT,
@@ -308,7 +375,8 @@ class Entity(HTTPBase):
                 elif binding == BINDING_HTTP_POST:
                     xmlstr = base64.b64decode(txt)
                 elif binding == BINDING_SOAP:
-                    func = getattr(soap, "parse_soap_enveloped_saml_%s" % msgtype)
+                    func = getattr(soap,
+                                   "parse_soap_enveloped_saml_%s" % msgtype)
                     xmlstr = func(txt)
                 elif binding == BINDING_HTTP_ARTIFACT:
                     xmlstr = base64.b64decode(txt)
@@ -319,7 +387,8 @@ class Entity(HTTPBase):
 
         return xmlstr
 
-    def parse_soap_message(self, text):
+    @staticmethod
+    def parse_soap_message(text):
         """
 
         :param text: The SOAP message
@@ -329,7 +398,8 @@ class Entity(HTTPBase):
                                                                         ecp,
                                                                         samlp])
 
-    def unpack_soap_message(self, text):
+    @staticmethod
+    def unpack_soap_message(text):
         """
         Picks out the parts of the SOAP message, body and headers apart
         :param text: The SOAP message
@@ -359,7 +429,7 @@ class Entity(HTTPBase):
 
     def _message(self, request_cls, destination=None, message_id=0,
                  consent=None, extensions=None, sign=False, sign_prepare=False,
-                 **kwargs):
+                 nsprefix=None, **kwargs):
         """
         Some parameters appear in all requests so simplify by doing
         it in one place
@@ -376,7 +446,7 @@ class Entity(HTTPBase):
             request_cls
         """
         if not message_id:
-            message_id = sid(self.seed)
+            message_id = sid()
 
         for key, val in self.message_args(message_id).items():
             if key not in kwargs:
@@ -393,6 +463,9 @@ class Entity(HTTPBase):
 
         if extensions:
             req.extensions = extensions
+
+        if nsprefix:
+            req.register_prefix(nsprefix)
 
         if sign:
             return reqid, self.sign(req, sign_prepare=sign_prepare)
@@ -436,9 +509,66 @@ class Entity(HTTPBase):
             else:
                 msg.extension_elements = extensions
 
+    def has_encrypt_cert_in_metadata(self, sp_entity_id):
+        """ Verifies if the metadata contains encryption certificates.
+
+        :param sp_entity_id: Entity ID for the calling service provider.
+        :return: True if encrypt cert exists in metadata, otherwise False.
+        """
+        if sp_entity_id is not None:
+            _certs = self.metadata.certs(sp_entity_id, "any", "encryption")
+            if len(_certs) > 0:
+                return True
+        return False
+
+    def _encrypt_assertion(self, encrypt_cert, sp_entity_id, response, node_xpath=None):
+        """ Encryption of assertions.
+
+        :param encrypt_cert: Certificate to be used for encryption.
+        :param sp_entity_id: Entity ID for the calling service provider.
+        :param response: A samlp.Response
+        :param node_xpath: Unquie path to the element to be encrypted.
+        :return: A new samlp.Resonse with the designated assertion encrypted.
+        """
+        _certs = []
+        cbxs = CryptoBackendXmlSec1(self.config.xmlsec_binary)
+        if encrypt_cert:
+            _certs = []
+            _certs.append(encrypt_cert)
+        elif sp_entity_id is not None:
+            _certs = self.metadata.certs(sp_entity_id, "any", "encryption")
+        exception = None
+        for _cert in _certs:
+            try:
+                begin_cert = "-----BEGIN CERTIFICATE-----\n"
+                end_cert = "\n-----END CERTIFICATE-----\n"
+                if begin_cert not in _cert:
+                    _cert = "%s%s" % (begin_cert, _cert)
+                if end_cert not in _cert:
+                    _cert = "%s%s" % (_cert, end_cert)
+                _, cert_file = make_temp(_cert.encode('ascii'), decode=False)
+                response = cbxs.encrypt_assertion(response, cert_file,
+                                                  pre_encryption_part(), node_xpath=node_xpath)
+                return response
+            except Exception as ex:
+                exception = ex
+                pass
+        if exception:
+            raise exception
+        return response
+
     def _response(self, in_response_to, consumer_url=None, status=None,
-                  issuer=None, sign=False, to_sign=None, encrypt_assertion=False, encrypt_cert=None, **kwargs):
+                  issuer=None, sign=False, to_sign=None, sp_entity_id=None,
+                  encrypt_assertion=False, encrypt_assertion_self_contained=False, encrypted_advice_attributes=False,
+                  encrypt_cert_advice=None, encrypt_cert_assertion=None,sign_assertion=None, pefim=False, **kwargs):
         """ Create a Response.
+            Encryption:
+                encrypt_assertion must be true for encryption to be performed. If encrypted_advice_attributes also is
+                true, then will the function try to encrypt the assertion in the the advice element of the main
+                assertion. Only one assertion element is allowed in the advice element, if multiple assertions exists
+                in the advice element the main assertion will be encrypted instead, since it's no point to encrypt
+                If encrypted_advice_attributes is
+                false the main assertion will be encrypted. Since the same key
 
         :param in_response_to: The session identifier of the request
         :param consumer_url: The URL which should receive the response
@@ -446,6 +576,15 @@ class Entity(HTTPBase):
         :param issuer: The issuer of the response
         :param sign: Whether the response should be signed or not
         :param to_sign: If there are other parts to sign
+        :param sp_entity_id: Entity ID for the calling service provider.
+        :param encrypt_assertion: True if assertions should be encrypted.
+        :param encrypt_assertion_self_contained: True if all encrypted assertions should have alla namespaces
+        selfcontained.
+        :param encrypted_advice_attributes: True if assertions in the advice element should be encrypted.
+        :param encrypt_cert_advice: Certificate to be used for encryption of assertions in the advice element.
+        :param encrypt_cert_assertion: Certificate to be used for encryption of assertions.
+        :param sign_assertion: True if assertions should be signed.
+        :param pefim: True if a response according to the PEFIM profile should be created.
         :param kwargs: Extra key word arguments
         :return: A Response instance
         """
@@ -467,13 +606,79 @@ class Entity(HTTPBase):
         if not sign and to_sign and not encrypt_assertion:
             return signed_instance_factory(response, self.sec, to_sign)
 
-        if encrypt_assertion:
-            sign_class = [(class_name(response), response.id)]
+        has_encrypt_cert = self.has_encrypt_cert_in_metadata(sp_entity_id)
+        if not has_encrypt_cert and encrypt_cert_advice is None:
+            encrypted_advice_attributes = False
+        if not has_encrypt_cert and encrypt_cert_assertion is None:
+            encrypt_assertion = False
+
+        if encrypt_assertion or (encrypted_advice_attributes and response.assertion.advice is not None and
+                                         len(response.assertion.advice.assertion) == 1):
             if sign:
-                response.signature = pre_signature_part(response.id, self.sec.my_cert, 1)
+                response.signature = pre_signature_part(response.id,
+                                                        self.sec.my_cert, 1)
+                sign_class = [(class_name(response), response.id)]
             cbxs = CryptoBackendXmlSec1(self.config.xmlsec_binary)
-            _, cert_file = make_temp("%s" % encrypt_cert, decode=False)
-            response = cbxs.encrypt_assertion(response, cert_file, pre_encryption_part())#template(response.assertion.id))
+            encrypt_advice = False
+            if encrypted_advice_attributes and response.assertion.advice is not None \
+                    and len(response.assertion.advice.assertion) > 0:
+                _assertions = response.assertion
+                if not isinstance(_assertions, list):
+                    _assertions = [_assertions]
+                for _assertion in _assertions:
+                    _assertion.advice.encrypted_assertion = []
+                    _assertion.advice.encrypted_assertion.append(EncryptedAssertion())
+                    _advice_assertions = copy.deepcopy(_assertion.advice.assertion)
+                    _assertion.advice.assertion = []
+                    if not isinstance(_advice_assertions, list):
+                        _advice_assertions = [_advice_assertions]
+                    for tmp_assertion in _advice_assertions:
+                        to_sign_advice = []
+                        if sign_assertion and not pefim:
+                            tmp_assertion.signature = pre_signature_part(tmp_assertion.id, self.sec.my_cert, 1)
+                            to_sign_advice.append((class_name(tmp_assertion), tmp_assertion.id))
+                        #tmp_assertion = response.assertion.advice.assertion[0]
+                        _assertion.advice.encrypted_assertion[0].add_extension_element(tmp_assertion)
+
+                        if encrypt_assertion_self_contained:
+                            advice_tag = response.assertion.advice._to_element_tree().tag
+                            assertion_tag = tmp_assertion._to_element_tree().tag
+                            response = \
+                                response.get_xml_string_with_self_contained_assertion_within_advice_encrypted_assertion(
+                                    assertion_tag, advice_tag)
+                        node_xpath = ''.join(["/*[local-name()=\"%s\"]" % v for v in
+                                              ["Response", "Assertion", "Advice", "EncryptedAssertion", "Assertion"]])
+
+                        if to_sign_advice:
+                            response = signed_instance_factory(response, self.sec, to_sign_advice)
+                        response = self._encrypt_assertion(encrypt_cert_advice, sp_entity_id, response, node_xpath=node_xpath)
+                        response = response_from_string(response)
+
+            if encrypt_assertion:
+                to_sign_assertion = []
+                if sign_assertion is not None and sign_assertion:
+                    _assertions = response.assertion
+                    if not isinstance(_assertions, list):
+                        _assertions = [_assertions]
+                    for _assertion in _assertions:
+                        _assertion.signature = pre_signature_part(_assertion.id, self.sec.my_cert, 1)
+                        to_sign_assertion.append((class_name(_assertion), _assertion.id))
+                if encrypt_assertion_self_contained:
+                    try:
+                        assertion_tag = response.assertion._to_element_tree().tag
+                    except:
+                        assertion_tag = response.assertion[0]._to_element_tree().tag
+                    response = pre_encrypt_assertion(response)
+                    response = response.get_xml_string_with_self_contained_assertion_within_encrypted_assertion(
+                        assertion_tag)
+                else:
+                    response = pre_encrypt_assertion(response)
+                if to_sign_assertion:
+                    response = signed_instance_factory(response, self.sec, to_sign_assertion)
+                response = self._encrypt_assertion(encrypt_cert_assertion, sp_entity_id, response)
+            else:
+                if to_sign:
+                    response = signed_instance_factory(response, self.sec, to_sign)
             if sign:
                 return signed_instance_factory(response, self.sec, sign_class)
             else:
@@ -519,20 +724,21 @@ class Entity(HTTPBase):
 
     # ------------------------------------------------------------------------
 
-    def srv2typ(self, service):
+    @staticmethod
+    def srv2typ(service):
         for typ in ["aa", "pdp", "aq"]:
             if service in ENDPOINTS[typ]:
                 if typ == "aa":
                     return "attribute_authority"
                 elif typ == "aq":
-                    return  "authn_authority"
+                    return "authn_authority"
                 else:
                     return typ
 
-    def _parse_request(self, xmlstr, request_cls, service, binding):
+    def _parse_request(self, enc_request, request_cls, service, binding):
         """Parse a Request
 
-        :param xmlstr: The request in its transport format
+        :param enc_request: The request in its transport format
         :param request_cls: The type of requests I expect
         :param service:
         :param binding: Which binding that was used to transport the message
@@ -552,8 +758,8 @@ class Entity(HTTPBase):
                 if receiver_addresses:
                     break
 
-        _log_info("receiver addresses: %s" % receiver_addresses)
-        _log_info("Binding: %s" % binding)
+        _log_debug("receiver addresses: %s" % receiver_addresses)
+        _log_debug("Binding: %s" % binding)
 
         try:
             timeslack = self.config.accepted_time_diff
@@ -566,15 +772,16 @@ class Entity(HTTPBase):
                                self.config.attribute_converters,
                                timeslack=timeslack)
 
-        origdoc = xmlstr
-        xmlstr = self.unravel(xmlstr, binding, request_cls.msgtype)
+        xmlstr = self.unravel(enc_request, binding, request_cls.msgtype)
         must = self.config.getattr("want_authn_requests_signed", "idp")
-        only_valid_cert = self.config.getattr("want_authn_requests_only_with_valid_cert", "idp")
+        only_valid_cert = self.config.getattr(
+            "want_authn_requests_only_with_valid_cert", "idp")
         if only_valid_cert is None:
             only_valid_cert = False
         if only_valid_cert:
             must = True
-        _request = _request.loads(xmlstr, binding, origdoc=origdoc, must=must, only_valid_cert=only_valid_cert)
+        _request = _request.loads(xmlstr, binding, origdoc=enc_request,
+                                  must=must, only_valid_cert=only_valid_cert)
 
         _log_debug("Loaded request")
 
@@ -612,8 +819,9 @@ class Entity(HTTPBase):
 
     def create_logout_request(self, destination, issuer_entity_id,
                               subject_id=None, name_id=None,
-                              reason=None, expire=None, message_id=0, 
-                              consent=None, extensions=None, sign=False):
+                              reason=None, expire=None, message_id=0,
+                              consent=None, extensions=None, sign=False,
+                              session_indexes=None):
         """ Constructs a LogoutRequest
 
         :param destination: Destination of the request
@@ -629,6 +837,7 @@ class Entity(HTTPBase):
         :param consent: Whether the principal have given her consent
         :param extensions: Possible extensions
         :param sign: Whether the query should be signed or not.
+        :param session_indexes: SessionIndex instances or just values
         :return: A LogoutRequest instance
         """
 
@@ -643,10 +852,20 @@ class Entity(HTTPBase):
         if not name_id:
             raise SAMLError("Missing subject identification")
 
+        args = {}
+        if session_indexes:
+            sis = []
+            for si in session_indexes:
+                if isinstance(si, SessionIndex):
+                    sis.append(si)
+                else:
+                    sis.append(SessionIndex(text=si))
+            args["session_index"] = sis
+
         return self._message(LogoutRequest, destination, message_id,
                              consent, extensions, sign, name_id=name_id,
                              reason=reason, not_on_or_after=expire,
-                             issuer=self._issuer())
+                             issuer=self._issuer(), **args)
 
     def create_logout_response(self, request, bindings=None, status=None,
                                sign=False, issuer=None):
@@ -673,14 +892,14 @@ class Entity(HTTPBase):
 
         return response
 
-    def create_artifact_resolve(self, artifact, destination, sid, consent=None,
-                                extensions=None, sign=False):
+    def create_artifact_resolve(self, artifact, destination, sessid,
+                                consent=None, extensions=None, sign=False):
         """
         Create a ArtifactResolve request
 
         :param artifact:
         :param destination:
-        :param sid: session id
+        :param sessid: session id
         :param consent:
         :param extensions:
         :param sign:
@@ -689,7 +908,7 @@ class Entity(HTTPBase):
 
         artifact = Artifact(text=artifact)
 
-        return self._message(ArtifactResolve, destination, sid,
+        return self._message(ArtifactResolve, destination, sessid,
                              consent, extensions, sign, artifact=artifact)
 
     def create_artifact_response(self, request, artifact, bindings=None,
@@ -710,7 +929,7 @@ class Entity(HTTPBase):
 
         return response
 
-    def create_manage_name_id_request(self, destination, message_id=0, 
+    def create_manage_name_id_request(self, destination, message_id=0,
                                       consent=None, extensions=None, sign=False,
                                       name_id=None, new_id=None,
                                       encrypted_id=None, new_encrypted_id=None,
@@ -762,7 +981,7 @@ class Entity(HTTPBase):
             was not.
         """
 
-        return self._parse_request(xmlstr, request.ManageNameIDRequest,
+        return self._parse_request(xmlstr, saml_request.ManageNameIDRequest,
                                    "manage_name_id_service", binding)
 
     def create_manage_name_id_response(self, request, bindings=None,
@@ -778,19 +997,23 @@ class Entity(HTTPBase):
 
         return response
 
-    def parse_manage_name_id_request_response(self, string, 
+    def parse_manage_name_id_request_response(self, string,
                                               binding=BINDING_SOAP):
-        return self._parse_response(string, response.ManageNameIDResponse,
-                                    "manage_name_id_service", binding)
+        return self._parse_response(string, saml_response.ManageNameIDResponse,
+                                    "manage_name_id_service", binding,
+                                    asynchop=False)
 
     # ------------------------------------------------------------------------
 
-    def _parse_response(self, xmlstr, response_cls, service, binding, outstanding_certs=None, **kwargs):
+    def _parse_response(self, xmlstr, response_cls, service, binding,
+                        outstanding_certs=None, **kwargs):
         """ Deal with a Response
 
         :param xmlstr: The response as a xml string
         :param response_cls: What type of response it is
         :param binding: What type of binding this message came through.
+        :param outstanding_certs: Certificates that belongs to me that the
+                IdP may have used to encrypt a response/assertion/..
         :param kwargs: Extra key word arguments
         :return: None if the reply doesn't contain a valid SAML Response,
             otherwise the response.
@@ -820,43 +1043,48 @@ class Entity(HTTPBase):
 
             try:
                 response = response_cls(self.sec, **kwargs)
-            except Exception, exc:
+            except Exception as exc:
                 logger.info("%s" % exc)
                 raise
 
             xmlstr = self.unravel(xmlstr, binding, response_cls.msgtype)
             origxml = xmlstr
-            if outstanding_certs is not None:
-                _response = samlp.any_response_from_string(xmlstr)
-                if len(_response.encrypted_assertion) > 0:
-                    _, cert_file = make_temp("%s" % outstanding_certs[_response.in_response_to]["key"], decode=False)
-                    cbxs = CryptoBackendXmlSec1(self.config.xmlsec_binary)
-                    xmlstr = cbxs.decrypt(xmlstr, cert_file)
             if not xmlstr:  # Not a valid reponse
                 return None
 
             try:
                 response = response.loads(xmlstr, False, origxml=origxml)
-            except SigverError, err:
+            except SigverError as err:
                 logger.error("Signature Error: %s" % err)
-                return None
-            except Exception, err:
+                raise
+            except UnsolicitedResponse:
+                logger.error("Unsolicited response")
+                raise
+            except Exception as err:
                 if "not well-formed" in "%s" % err:
                     logger.error("Not well-formed XML")
-                    return None
+                    raise
 
             logger.debug("XMLSTR: %s" % xmlstr)
 
-            if hasattr(response.response, 'encrypted_assertion'):
-                for encrypted_assertion in response.response.encrypted_assertion:
-                    if encrypted_assertion.extension_elements is not None:
-                        assertion_list = extension_elements_to_elements(encrypted_assertion.extension_elements, [saml])
-                        for assertion in assertion_list:
-                            _assertion = saml.assertion_from_string(str(assertion))
-                            response.response.assertion.append(_assertion)
-
             if response:
-                response = response.verify()
+                keys = None
+                if outstanding_certs:
+                    try:
+                        cert = outstanding_certs[response.in_response_to]
+                    except KeyError:
+                        keys = None
+                    else:
+                        if not isinstance(cert, list):
+                            cert = [cert]
+                        keys = []
+                        for _cert in cert:
+                            keys.append(_cert["key"])
+                only_identity_in_encrypted_assertion = False
+                if "only_identity_in_encrypted_assertion" in kwargs:
+                    only_identity_in_encrypted_assertion = kwargs["only_identity_in_encrypted_assertion"]
+
+                response = response.verify(keys)
 
             if not response:
                 return None
@@ -883,7 +1111,7 @@ class Entity(HTTPBase):
             was not.
         """
 
-        return self._parse_request(xmlstr, request.LogoutRequest,
+        return self._parse_request(xmlstr, saml_request.LogoutRequest,
                                    "single_logout_service", binding)
 
     def use_artifact(self, message, endpoint_index=0):
@@ -893,8 +1121,8 @@ class Entity(HTTPBase):
         :param endpoint_index:
         :return:
         """
-        message_handle = sha1("%s" % message)
-        message_handle.update(rndstr())
+        message_handle = sha1(str(message).encode('utf-8'))
+        message_handle.update(rndbytes())
         mhd = message_handle.digest()
         saml_art = create_artifact(self.config.entityid, mhd, endpoint_index)
         self.artifact[saml_art] = message
@@ -960,7 +1188,7 @@ class Entity(HTTPBase):
         kwargs = {"entity_id": self.config.entityid,
                   "attribute_converters": self.config.attribute_converters}
 
-        resp = self._parse_response(xmlstr, response.ArtifactResponse,
+        resp = self._parse_response(xmlstr, saml_response.ArtifactResponse,
                                     "artifact_resolve", BINDING_SOAP,
                                     **kwargs)
         # should just be one

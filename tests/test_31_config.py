@@ -32,10 +32,11 @@ sp1 = {
     },
     "key_file": full_path("test.key"),
     "cert_file": full_path("test.pem"),
-    "metadata": {
-        "local": [full_path("metadata.xml"),
-                  full_path("urn-mace-swami.se-swamid-test-1.0-metadata.xml")],
-    },
+    "metadata": [{
+        "class": "saml2.mdstore.MetaDataFile",
+        "metadata": [(full_path("metadata.xml"), ),
+                  (full_path("urn-mace-swami.se-swamid-test-1.0-metadata.xml"), )],
+    }],
     "virtual_organization": {
         "coip": {
             "nameid_format": "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
@@ -171,7 +172,7 @@ def _eq(l1, l2):
 def test_1():
     c = SPConfig().load(sp1)
     c.context = "sp"
-    print c
+    print(c)
     assert c._sp_endpoints
     assert c._sp_name
     assert c._sp_idp
@@ -179,11 +180,11 @@ def test_1():
     assert isinstance(md, MetadataStore)
 
     assert len(c._sp_idp) == 1
-    assert c._sp_idp.keys() == ["urn:mace:example.com:saml:roland:idp"]
-    assert c._sp_idp.values() == [{'single_sign_on_service':
-                                       {
-                                           'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect':
-                                               'http://localhost:8088/sso/'}}]
+    assert list(c._sp_idp.keys()) == ["urn:mace:example.com:saml:roland:idp"]
+    assert list(c._sp_idp.values()) == [{'single_sign_on_service':
+                                         {
+                                             'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect':
+                                             'http://localhost:8088/sso/'}}]
 
     assert c.only_use_keys_in_metadata
 
@@ -192,7 +193,7 @@ def test_2():
     c = SPConfig().load(sp2)
     c.context = "sp"
 
-    print c
+    print(c)
     assert c._sp_endpoints
     assert c.getattr("endpoints", "sp")
     assert c._sp_idp
@@ -201,8 +202,8 @@ def test_2():
     assert c._sp_required_attributes
 
     assert len(c._sp_idp) == 1
-    assert c._sp_idp.keys() == [""]
-    assert c._sp_idp.values() == [
+    assert list(c._sp_idp.keys()) == [""]
+    assert list(c._sp_idp.values()) == [
         "https://example.com/saml2/idp/SSOService.php"]
     assert c.only_use_keys_in_metadata is True
 
@@ -234,7 +235,7 @@ def test_idp_1():
     c = IdPConfig().load(IDP1)
     c.context = "idp"
 
-    print c
+    print(c)
     assert c.endpoint("single_sign_on_service")[0] == 'http://localhost:8088/'
 
     attribute_restrictions = c.getattr("policy",
@@ -246,7 +247,7 @@ def test_idp_2():
     c = IdPConfig().load(IDP2)
     c.context = "idp"
 
-    print c
+    print(c)
     assert c.endpoint("single_logout_service",
                       BINDING_SOAP) == []
     assert c.endpoint("single_logout_service",
@@ -262,7 +263,7 @@ def test_wayf():
     c.context = "sp"
 
     idps = c.metadata.with_descriptor("idpsso")
-    ent = idps.values()[0]
+    ent = list(idps.values())[0]
     assert name(ent) == 'Example Co.'
     assert name(ent, "se") == 'Exempel AB'
 
@@ -292,7 +293,7 @@ def test_conf_syslog():
     root_logger.level = logging.NOTSET
     root_logger.handlers = []
 
-    print c.logger
+    print(c.logger)
     c.setup_logger()
 
     assert root_logger.level != logging.NOTSET
@@ -301,10 +302,11 @@ def test_conf_syslog():
     assert isinstance(root_logger.handlers[0],
                       logging.handlers.SysLogHandler)
     handler = root_logger.handlers[0]
-    print handler.__dict__
+    print(handler.__dict__)
     assert handler.facility == "local3"
     assert handler.address == ('localhost', 514)
-    if sys.version >= (2, 7):
+    if ((sys.version_info.major == 2 and sys.version_info.minor >= 7) or
+        sys.version_info.major > 2):
         assert handler.socktype == 2
     else:
         pass

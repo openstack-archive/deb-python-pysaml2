@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from saml2.md import AttributeProfile
 from saml2.sigver import security_context
 from saml2.config import Config
 from saml2.validate import valid_instance
@@ -18,7 +19,8 @@ from saml2 import BINDING_SOAP
 from saml2 import samlp
 from saml2 import class_name
 
-import xmldsig as ds
+from saml2 import xmldsig as ds
+import six
 
 from saml2.sigver import pre_signature_part
 
@@ -52,11 +54,13 @@ ORG_ATTR_TRANSL = {
     "organization_url": ("url", md.OrganizationURL)
 }
 
+MDNS = '"urn:oasis:names:tc:SAML:2.0:metadata"'
+XMLNSXS = " xmlns:xs=\"http://www.w3.org/2001/XMLSchema\""
 
-def metadata_tostring_fix(desc, nspair):
-    MDNS = '"urn:oasis:names:tc:SAML:2.0:metadata"'
-    XMLNSXS = " xmlns:xs=\"http://www.w3.org/2001/XMLSchema\""
-    xmlstring = desc.to_string(nspair)
+
+def metadata_tostring_fix(desc, nspair, xmlstring=""):
+    if not xmlstring:
+        xmlstring = desc.to_string(nspair)
     if "\"xs:string\"" in xmlstring and XMLNSXS not in xmlstring:
         xmlstring = xmlstring.replace(MDNS, MDNS+XMLNSXS)
     return xmlstring
@@ -94,13 +98,15 @@ def create_metadata_string(configfile, config, valid, cert, keyfile, mid, name,
 
         return metadata_tostring_fix(desc, nspair)
     else:
-        for eid in eds:
-            if sign:
-                desc = sign_entity_descriptor(eid, mid, secc)
-            else:
-                desc = eid
-            valid_instance(desc)
-            return metadata_tostring_fix(desc, nspair)
+        eid = eds[0]
+        if sign:
+            eid, xmldoc = sign_entity_descriptor(eid, mid, secc)
+        else:
+            xmldoc = None
+
+        valid_instance(eid)
+        xmldoc = metadata_tostring_fix(eid, nspair, xmldoc)
+        return xmldoc
 
 
 def _localized_name(val, klass):
@@ -132,7 +138,7 @@ def do_organization_info(ava):
     for dkey, (ckey, klass) in ORG_ATTR_TRANSL.items():
         if ckey not in ava:
             continue
-        if isinstance(ava[ckey], basestring):
+        if isinstance(ava[ckey], six.string_types):
             setattr(org, dkey, [_localized_name(ava[ckey], klass)])
         elif isinstance(ava[ckey], list):
             setattr(org, dkey,
@@ -158,7 +164,7 @@ def do_contact_person_info(lava):
                 data = []
                 if isinstance(classpec, list):
                     # What if value is not a list ?
-                    if isinstance(value, basestring):
+                    if isinstance(value, six.string_types):
                         data = [classpec[0](text=value)]
                     else:
                         for val in value:
@@ -185,43 +191,45 @@ def do_contact_person_info(lava):
     return cps
 
 
-def do_key_descriptor(cert, use="both"):
-    if use == "both":
-        return [
-            md.KeyDescriptor(
-                key_info=ds.KeyInfo(
-                    x509_data=ds.X509Data(
-                        x509_certificate=ds.X509Certificate(text=cert)
-                    )
-                ),
-                use="encryption"
-            ),
-            md.KeyDescriptor(
-                key_info=ds.KeyInfo(
-                    x509_data=ds.X509Data(
-                        x509_certificate=ds.X509Certificate(text=cert)
-                    )
-                ),
-                use="signing"
+def do_key_descriptor(cert=None, enc_cert=None, use="both"):
+    kd_list = []
+    if use in ["signing", "both"] and cert is not None:
+        if not isinstance(cert, list):
+            cert = [cert]
+        for _cert in cert:
+            kd_list.append(
+                md.KeyDescriptor(
+                    key_info=ds.KeyInfo(
+                        x509_data=ds.X509Data(
+                            x509_certificate=ds.X509Certificate(text=_cert)
+                        )
+                    ),
+                    use="signing"
+                )
             )
-        ]
-    elif use in ["signing", "encryption"]:
+    if use in ["both", "encryption"] and enc_cert is not None:
+        if not isinstance(enc_cert, list):
+            enc_cert = [enc_cert]
+        for _enc_cert in enc_cert:
+            kd_list.append(
+                md.KeyDescriptor(
+                    key_info=ds.KeyInfo(
+                        x509_data=ds.X509Data(
+                            x509_certificate=ds.X509Certificate(text=_enc_cert)
+                        )
+                    ),
+                    use="encryption"
+                )
+            )
+    if len(kd_list) == 0 and cert is not None:
         return md.KeyDescriptor(
             key_info=ds.KeyInfo(
                 x509_data=ds.X509Data(
                     x509_certificate=ds.X509Certificate(text=cert)
                 )
-            ),
-            use=use
-        )
-    else:
-        return md.KeyDescriptor(
-            key_info=ds.KeyInfo(
-                x509_data=ds.X509Data(
-                    x509_certificate=ds.X509Certificate(text=cert)
-                )
             )
         )
+    return kd_list
 
 
 def do_requested_attribute(attributes, acs, is_required="false"):
@@ -248,7 +256,7 @@ def do_uiinfo(_uiinfo):
 
         aclass = uii.child_class(attr)
         inst = getattr(uii, attr)
-        if isinstance(val, basestring):
+        if isinstance(val, six.string_types):
             ainst = aclass(text=val)
             inst.append(ainst)
         elif isinstance(val, dict):
@@ -258,7 +266,7 @@ def do_uiinfo(_uiinfo):
             inst.append(ainst)
         else:
             for value in val:
-                if isinstance(value, basestring):
+                if isinstance(value, six.string_types):
                     ainst = aclass(text=value)
                     inst.append(ainst)
                 elif isinstance(value, dict):
@@ -294,11 +302,11 @@ def do_uiinfo(_uiinfo):
         _attr = "keywords"
         val = _uiinfo[_attr]
         inst = getattr(uii, _attr)
-        # list of basestrings, dictionary or list of dictionaries
+        # list of six.string_types, dictionary or list of dictionaries
         if isinstance(val, list):
             for value in val:
                 keyw = mdui.Keywords()
-                if isinstance(value, basestring):
+                if isinstance(value, six.string_types):
                     keyw.text = value
                 elif isinstance(value, dict):
                     keyw.text = " ".join(value["text"])
@@ -307,7 +315,7 @@ def do_uiinfo(_uiinfo):
                     except KeyError:
                         pass
                 else:
-                    raise SAMLError("Configuration error: ui_info logo")
+                    raise SAMLError("Configuration error: ui_info keywords")
                 inst.append(keyw)
         elif isinstance(val, dict):
             keyw = mdui.Keywords()
@@ -318,7 +326,7 @@ def do_uiinfo(_uiinfo):
                 pass
             inst.append(keyw)
         else:
-            raise SAMLError("Configuration Error: ui_info logo")
+            raise SAMLError("Configuration Error: ui_info keywords")
     except KeyError:
         pass
 
@@ -393,7 +401,7 @@ def do_extensions(mname, item):
 def _do_nameid_format(cls, conf, typ):
     namef = conf.getattr("name_id_format", typ)
     if namef:
-        if isinstance(namef, basestring):
+        if isinstance(namef, six.string_types):
             ids = [md.NameIDFormat(namef)]
         else:
             ids = [md.NameIDFormat(text=form) for form in namef]
@@ -408,19 +416,28 @@ def do_endpoints(conf, endpoints):
             servs = []
             i = 1
             for args in conf[endpoint]:
-                if isinstance(args, basestring):  # Assume it's the location
+                if isinstance(args, six.string_types):  # Assume it's the location
                     args = {"location": args,
                             "binding": DEFAULT_BINDING[endpoint]}
-                elif isinstance(args, tuple):
+                elif isinstance(args, tuple) or isinstance(args, list):
                     if len(args) == 2:  # (location, binding)
                         args = {"location": args[0], "binding": args[1]}
                     elif len(args) == 3:  # (location, binding, index)
                         args = {"location": args[0], "binding": args[1],
                                 "index": args[2]}
 
-                if indexed and "index" not in args:
-                    args["index"] = "%d" % i
-                    i += 1
+                if indexed:
+                    if "index" not in args:
+                        args["index"] = "%d" % i
+                        i += 1
+                    else:
+                        try:
+                            int(args["index"])
+                        except ValueError:
+                            raise
+                        else:
+                            args["index"] = str(args["index"])
+
                 servs.append(factory(eclass, **args))
                 service[endpoint] = servs
         except KeyError:
@@ -431,11 +448,63 @@ DEFAULT = {
     "want_assertions_signed": "true",
     "authn_requests_signed": "false",
     "want_authn_requests_signed": "false",
-    "want_authn_requests_only_with_valid_cert": "false",
+    #"want_authn_requests_only_with_valid_cert": "false",
 }
 
 
-def do_spsso_descriptor(conf, cert=None):
+def do_attribute_consuming_service(conf, spsso):
+
+    service_description = service_name = None
+    requested_attributes = []
+    acs = conf.attribute_converters
+    req = conf.getattr("required_attributes", "sp")
+    if req:
+        requested_attributes.extend(do_requested_attribute(req, acs,
+                                                           is_required="true"))
+
+    opt = conf.getattr("optional_attributes", "sp")
+
+    if opt:
+        requested_attributes.extend(do_requested_attribute(opt, acs))
+
+    try:
+        if conf.description:
+            try:
+                (text, lang) = conf.description
+            except ValueError:
+                text = conf.description
+                lang = "en"
+            service_description = [md.ServiceDescription(text=text, lang=lang)]
+    except KeyError:
+        pass
+
+    try:
+        if conf.name:
+            try:
+                (text, lang) = conf.name
+            except ValueError:
+                text = conf.name
+                lang = "en"
+            service_name = [md.ServiceName(text=text, lang=lang)]
+    except KeyError:
+        pass
+
+    # Must be both requested attributes and service name
+    if requested_attributes:
+        if not service_name:
+            service_name = [md.ServiceName(text="", lang="en")]
+
+        ac_serv = md.AttributeConsumingService(
+            index="1", service_name=service_name,
+            requested_attribute=requested_attributes)
+
+        if service_description:
+            ac_serv.service_description = service_description
+
+        spsso.attribute_consuming_service = [ac_serv]
+
+
+def do_spsso_descriptor(conf, cert=None, enc_cert=None):
     spsso = md.SPSSODescriptor()
     spsso.protocol_support_enumeration = samlp.NAMESPACE
 
@@ -456,17 +525,23 @@ def do_spsso_descriptor(conf, cert=None):
                                                  ENDPOINTS["sp"]).items():
             setattr(spsso, endpoint, instlist)
 
-    # ext = do_endpoints(endps, ENDPOINT_EXT["sp"])
-    # if ext:
-    #     if spsso.extensions is None:
-    #         spsso.extensions = md.Extensions()
-    #     for vals in ext.values():
-    #         for val in vals:
-    #             spsso.extensions.add_extension_element(val)
+    ext = do_endpoints(endps, ENDPOINT_EXT["sp"])
+    if ext:
+        if spsso.extensions is None:
+            spsso.extensions = md.Extensions()
+        for vals in ext.values():
+            for val in vals:
+                spsso.extensions.add_extension_element(val)
 
-    if cert:
-        encryption_type = conf.encryption_type
-        spsso.key_descriptor = do_key_descriptor(cert, encryption_type)
+    ui_info = conf.getattr("ui_info", "sp")
+    if ui_info:
+        if spsso.extensions is None:
+            spsso.extensions = md.Extensions()
+        spsso.extensions.add_extension_element(do_uiinfo(ui_info))
+
+    if cert or enc_cert:
+        metadata_key_usage = conf.metadata_key_usage
+        spsso.key_descriptor = do_key_descriptor(cert=cert, enc_cert=enc_cert, use=metadata_key_usage)
 
     for key in ["want_assertions_signed", "authn_requests_signed"]:
         try:
@@ -479,49 +554,12 @@ def do_spsso_descriptor(conf, cert=None):
         except KeyError:
             setattr(spsso, key, DEFAULTS[key])
 
-    requested_attributes = []
-    acs = conf.attribute_converters
-    req = conf.getattr("required_attributes", "sp")
-    if req:
-        requested_attributes.extend(do_requested_attribute(req, acs,
-                                                           is_required="true"))
-
+    do_attribute_consuming_service(conf, spsso)
     _do_nameid_format(spsso, conf, "sp")
-
-    opt = conf.getattr("optional_attributes", "sp")
-
-    if opt:
-        requested_attributes.extend(do_requested_attribute(opt, acs))
-
-    if requested_attributes:
-        # endpoints that might publish requested attributes
-        if spsso.attribute_consuming_service:
-            for acs in spsso.attribute_consuming_service:
-                if not acs.requested_attribute:
-                    acs.requested_attribute = requested_attributes
-
-#        spsso.attribute_consuming_service = [md.AttributeConsumingService(
-#            requested_attribute=requested_attributes,
-#            service_name= [md.ServiceName(lang="en",text=conf.name)],
-#            index="1",
-#            )]
-#        try:
-#            if conf.description:
-#                try:
-#                    (text, lang) = conf.description
-#                except ValueError:
-#                    text = conf.description
-#                    lang = "en"
-#                spsso.attribute_consuming_service[0].service_description = [
-#                    md.ServiceDescription(text=text,
-#                                          lang=lang)]
-#        except KeyError:
-#            pass
-
     return spsso
 
 
-def do_idpsso_descriptor(conf, cert=None):
+def do_idpsso_descriptor(conf, cert=None, enc_cert=None):
     idpsso = md.IDPSSODescriptor()
     idpsso.protocol_support_enumeration = samlp.NAMESPACE
 
@@ -550,33 +588,24 @@ def do_idpsso_descriptor(conf, cert=None):
             idpsso.extensions = md.Extensions()
         idpsso.extensions.add_extension_element(do_uiinfo(ui_info))
 
-    if cert:
-        idpsso.key_descriptor = do_key_descriptor(cert)
+    if cert or enc_cert:
+        idpsso.key_descriptor = do_key_descriptor(cert, enc_cert, use=conf.metadata_key_usage)
 
     for key in ["want_authn_requests_signed"]:
+                #"want_authn_requests_only_with_valid_cert"]:
         try:
             val = conf.getattr(key, "idp")
             if val is None:
-                setattr(idpsso, key, DEFAULT["want_authn_requests_signed"])
+                setattr(idpsso, key, DEFAULT[key])
             else:
-                setattr(idpsso, key, "%s" % val)
-        except KeyError:
-            setattr(idpsso, key, DEFAULTS[key])
-
-    for key in ["want_authn_requests_only_with_valid_cert"]:
-        try:
-            val = conf.getattr(key, "idp")
-            if val is None:
-                setattr(idpsso, key, DEFAULT["want_authn_requests_only_with_valid_cert"])
-            else:
-                setattr(idpsso, key, "%s" % val)
+                setattr(idpsso, key, ("%s" % val).lower())
         except KeyError:
             setattr(idpsso, key, DEFAULTS[key])
 
     return idpsso
 
 
-def do_aa_descriptor(conf, cert):
+def do_aa_descriptor(conf, cert=None, enc_cert=None):
     aad = md.AttributeAuthorityDescriptor()
     aad.protocol_support_enumeration = samlp.NAMESPACE
 
@@ -589,13 +618,23 @@ def do_aa_descriptor(conf, cert):
 
     _do_nameid_format(aad, conf, "aa")
 
-    if cert:
-        aad.key_descriptor = do_key_descriptor(cert)
+    if cert or enc_cert:
+        aad.key_descriptor = do_key_descriptor(cert, enc_cert, use=conf.metadata_key_usage)
+
+    attributes = conf.getattr("attribute", "aa")
+    if attributes:
+        for attribute in attributes:
+            aad.attribute.append(Attribute(text=attribute))
+
+    attribute_profiles = conf.getattr("attribute_profile", "aa")
+    if attribute_profiles:
+        for attribute_profile in attribute_profiles:
+            aad.attribute.append(AttributeProfile(text=attribute_profile))
 
     return aad
 
 
-def do_aq_descriptor(conf, cert):
+def do_aq_descriptor(conf, cert=None, enc_cert=None):
     aqs = md.AuthnAuthorityDescriptor()
     aqs.protocol_support_enumeration = samlp.NAMESPACE
 
@@ -608,13 +647,13 @@ def do_aq_descriptor(conf, cert):
 
     _do_nameid_format(aqs, conf, "aq")
 
-    if cert:
-        aqs.key_descriptor = do_key_descriptor(cert)
+    if cert or enc_cert:
+        aqs.key_descriptor = do_key_descriptor(cert, enc_cert, use=conf.metadata_key_usage)
 
     return aqs
 
 
-def do_pdp_descriptor(conf, cert):
+def do_pdp_descriptor(conf, cert=None, enc_cert=None):
     """ Create a Policy Decision Point descriptor """
     pdp = md.PDPDescriptor()
 
@@ -630,13 +669,24 @@ def do_pdp_descriptor(conf, cert):
     _do_nameid_format(pdp, conf, "pdp")
 
     if cert:
-        pdp.key_descriptor = do_key_descriptor(cert)
+        pdp.key_descriptor = do_key_descriptor(cert, enc_cert, use=conf.metadata_key_usage)
 
     return pdp
 
 
 def entity_descriptor(confd):
-    mycert = "".join(open(confd.cert_file).readlines()[1:-1])
+    mycert = None
+    enc_cert = None
+    if confd.cert_file is not None:
+        mycert = []
+        mycert.append("".join(open(confd.cert_file).readlines()[1:-1]))
+        if confd.additional_cert_files is not None:
+            for _cert_file in confd.additional_cert_files:
+                mycert.append("".join(open(_cert_file).readlines()[1:-1]))
+    if confd.encryption_keypairs is not None:
+        enc_cert = []
+        for _encryption in confd.encryption_keypairs:
+            enc_cert.append("".join(open(_encryption["cert_file"]).readlines()[1:-1]))
 
     entd = md.EntityDescriptor()
     entd.entity_id = confd.entityid
@@ -664,19 +714,19 @@ def entity_descriptor(confd):
 
     if "sp" in serves:
         confd.context = "sp"
-        entd.spsso_descriptor = do_spsso_descriptor(confd, mycert)
+        entd.spsso_descriptor = do_spsso_descriptor(confd, mycert, enc_cert)
     if "idp" in serves:
         confd.context = "idp"
-        entd.idpsso_descriptor = do_idpsso_descriptor(confd, mycert)
+        entd.idpsso_descriptor = do_idpsso_descriptor(confd, mycert, enc_cert)
     if "aa" in serves:
         confd.context = "aa"
-        entd.attribute_authority_descriptor = do_aa_descriptor(confd, mycert)
+        entd.attribute_authority_descriptor = do_aa_descriptor(confd, mycert, enc_cert)
     if "pdp" in serves:
         confd.context = "pdp"
-        entd.pdp_descriptor = do_pdp_descriptor(confd, mycert)
+        entd.pdp_descriptor = do_pdp_descriptor(confd, mycert, enc_cert)
     if "aq" in serves:
         confd.context = "aq"
-        entd.authn_authority_descriptor = do_aq_descriptor(confd, mycert)
+        entd.authn_authority_descriptor = do_aq_descriptor(confd, mycert, enc_cert)
 
     return entd
 
@@ -706,14 +756,26 @@ def entities_descriptor(eds, valid_for, name, ident, sign, secc):
         entities.id = ident
         xmldoc = secc.sign_statement("%s" % entities, class_name(entities))
         entities = md.entities_descriptor_from_string(xmldoc)
-    return entities
+    else:
+        xmldoc = None
+
+    return entities, xmldoc
 
 
 def sign_entity_descriptor(edesc, ident, secc):
+    """
+
+    :param edesc: EntityDescriptor instance
+    :param ident: EntityDescriptor identifier
+    :param secc: Security context
+    :return: Tuple with EntityDescriptor instance and Signed XML document
+    """
+
     if not ident:
         ident = sid()
 
     edesc.signature = pre_signature_part(ident, secc.my_cert, 1)
     edesc.id = ident
     xmldoc = secc.sign_statement("%s" % edesc, class_name(edesc))
-    return md.entity_descriptor_from_string(xmldoc)
+    edesc = md.entity_descriptor_from_string(xmldoc)
+    return edesc, xmldoc
