@@ -13,7 +13,7 @@ BUILD_DATE  = $(shell LC_ALL=C date -u "+%B %d, %Y" -d "$(LAST_CHANGE)")
 	dh $@ --buildsystem=python_distutils --with python2,python3,sphinxdoc
 
 override_dh_install:
-	set -e && for pyvers in $(PYTHONS); do \
+	set -e ; for pyvers in $(PYTHONS); do \
 		python$$pyvers setup.py install --install-layout=deb \
 			--no-compile --root $(CURDIR)/debian/python-pysaml2; \
 	done
@@ -25,11 +25,10 @@ override_dh_install:
 		$(CURDIR)/debian/python-pysaml2/usr/bin/pysaml2-parse-xsd2
 	mv $(CURDIR)/debian/python-pysaml2/usr/bin/merge_metadata.py \
 		$(CURDIR)/debian/python-pysaml2/usr/bin/pysaml2-merge-metadata
-# Python3 is not yet supported upstream
-#	set -e && for pyvers in $(PYTHON3S); do \
-#		python$$pyvers setup.py install --install-layout=deb \
-#			--root $(CURDIR)/debian/python3-pysaml2; \
-#	done
+	set -e ; for pyvers in $(PYTHON3S); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python3-pysaml2; \
+	done
 	rm -rf $(CURDIR)/debian/python*-pysaml2/usr/lib/python*/dist-packages/*.pth
 
 override_dh_auto_test:

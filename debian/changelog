@@ -1,6 +1,7 @@
 python-pysaml2 (3.0.0-1) experimental; urgency=medium
 
   * New upstream release.
+  * Added Python3 support.
 
  -- Thomas Goirand <zigo@debian.org>  Fri, 31 Jul 2015 08:47:57 +0000
 

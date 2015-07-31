@@ -5,7 +5,7 @@ Maintainer: PKG OpenStack <openstack-devel@lists.alioth.debian.org>
 Uploaders: Thomas Goirand <zigo@debian.org>,
 Build-Depends: debhelper (>= 9),
                dh-python,
-               python-all (>= 2.6.6-3~),
+               python-all,
                python-setuptools,
                python-sphinx,
                python3-all (>= 3.4),
@@ -83,7 +83,6 @@ Description: SAML Version 2 to be used in a WSGI environment - Python 3.x
 Package: python-pysaml2-doc
 Section: doc
 Architecture: all
-Pre-Depends: dpkg (>= 1.15.6~),
 Depends: ${misc:Depends},
          ${sphinxdoc:Depends},
 Description: SAML Version 2 to be used in a WSGI environment - doc
