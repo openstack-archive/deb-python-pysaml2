@@ -6,6 +6,9 @@ PYTHON3S:=$(shell py3versions -vr)
 UPSTREAM_GIT = git://github.com/rohe/pysaml2.git
 -include /usr/share/openstack-pkg-tools/pkgos.make
 
+LAST_CHANGE = $(shell dpkg-parsechangelog -S Date)
+BUILD_DATE  = $(shell LC_ALL=C date -u "+%B %d, %Y" -d "$(LAST_CHANGE)")
+
 %:
 	dh $@ --buildsystem=python_distutils --with python2,python3,sphinxdoc
 
@@ -19,19 +22,14 @@ override_dh_install:
 	mv $(CURDIR)/debian/python-pysaml2/usr/bin/mdexport.py \
 		$(CURDIR)/debian/python-pysaml2/usr/bin/python2-pysaml2-mdexport
 	mv $(CURDIR)/debian/python-pysaml2/usr/bin/parse_xsd2.py \
-		$(CURDIR)/debian/python-pysaml2/usr/bin/python2-pysaml2-parse-xsd2
-
-	set -e && for pyvers in $(PYTHON3S); do \
-		python$$pyvers setup.py install --install-layout=deb \
-			--no-compile --root $(CURDIR)/debian/python3-pysaml2; \
-	done
-	mv $(CURDIR)/debian/python3-pysaml2/usr/bin/make_metadata.py \
-		$(CURDIR)/debian/python3-pysaml2/usr/bin/python3-pysaml2-make-metadata
-	mv $(CURDIR)/debian/python3-pysaml2/usr/bin/mdexport.py \
-		$(CURDIR)/debian/python3-pysaml2/usr/bin/python3-pysaml2-mdexport
-	mv $(CURDIR)/debian/python3-pysaml2/usr/bin/parse_xsd2.py \
-		$(CURDIR)/debian/python3-pysaml2/usr/bin/python3-pysaml2-parse-xsd2
-
+		$(CURDIR)/debian/python-pysaml2/usr/bin/pysaml2-parse-xsd2
+	mv $(CURDIR)/debian/python-pysaml2/usr/bin/merge_metadata.py \
+		$(CURDIR)/debian/python-pysaml2/usr/bin/pysaml2-merge-metadata
+# Python3 is not yet supported upstream
+#	set -e && for pyvers in $(PYTHON3S); do \
+#		python$$pyvers setup.py install --install-layout=deb \
+#			--root $(CURDIR)/debian/python3-pysaml2; \
+#	done
 	rm -rf $(CURDIR)/debian/python*-pysaml2/usr/lib/python*/dist-packages/*.pth
 
 override_dh_auto_test:
@@ -46,7 +44,7 @@ override_dh_clean:
 	rm -rf build
 
 override_dh_sphinxdoc:
-	sphinx-build -b html doc debian/python-pysaml2-doc/usr/share/doc/python-pysaml2-doc/html
+	sphinx-build -D today="$(BUILD_DATE)" -b html doc debian/python-pysaml2-doc/usr/share/doc/python-pysaml2-doc/html
 	dh_sphinxdoc -O--buildsystem=python_distutils
 
 # Commands not to run
