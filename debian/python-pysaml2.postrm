@@ -2,13 +2,13 @@
 
 set -e
 
-if [ "$1" = "remove" ] || [ "$1" = "disappear" ]; then
-	update-alternatives --remove pysaml2-make-metadata 	/usr/bin/python2-pysaml2-make-metadata
-	update-alternatives --remove pysaml2-mdexport 		/usr/bin/python2-pysaml2-mdexport
-	update-alternatives --remove pysaml2-parse-xsd2 	/usr/bin/python2-pysaml2-parse-xsd2
+if [ "$1" = "remove" ] || [ "$1" = "disappear" ] ; then
+	update-alternatives --remove make_metadata /usr/bin/python2-make_metadata
+	update-alternatives --remove mdexport /usr/bin/python2-mdexport
+	update-alternatives --remove parse_xsd2 /usr/bin/python2-parse_xsd2
+	update-alternatives --remove merge_metadata /usr/bin/python2-merge_metadata
 fi
 
 #DEBHELPER#
 
 exit 0
-

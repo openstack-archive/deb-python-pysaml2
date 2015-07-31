@@ -17,17 +17,13 @@ override_dh_install:
 		python$$pyvers setup.py install --install-layout=deb \
 			--no-compile --root $(CURDIR)/debian/python-pysaml2; \
 	done
-	mv $(CURDIR)/debian/python-pysaml2/usr/bin/make_metadata.py \
-		$(CURDIR)/debian/python-pysaml2/usr/bin/python2-pysaml2-make-metadata
-	mv $(CURDIR)/debian/python-pysaml2/usr/bin/mdexport.py \
-		$(CURDIR)/debian/python-pysaml2/usr/bin/python2-pysaml2-mdexport
-	mv $(CURDIR)/debian/python-pysaml2/usr/bin/parse_xsd2.py \
-		$(CURDIR)/debian/python-pysaml2/usr/bin/pysaml2-parse-xsd2
-	mv $(CURDIR)/debian/python-pysaml2/usr/bin/merge_metadata.py \
-		$(CURDIR)/debian/python-pysaml2/usr/bin/pysaml2-merge-metadata
 	set -e ; for pyvers in $(PYTHON3S); do \
 		python$$pyvers setup.py install --install-layout=deb \
 			--root $(CURDIR)/debian/python3-pysaml2; \
+	done
+	for i in make_metadata mdexport parse_xsd2 merge_metadata ; do \
+		mv $(CURDIR)/debian/python-pysaml2/usr/bin/$$i.py $(CURDIR)/debian/python-pysaml2/usr/bin/python2-$$i ; \
+		mv $(CURDIR)/debian/python3-pysaml2/usr/bin/$$i.py $(CURDIR)/debian/python3-pysaml2/usr/bin/python3-$$i ; \
 	done
 	rm -rf $(CURDIR)/debian/python*-pysaml2/usr/lib/python*/dist-packages/*.pth
 
