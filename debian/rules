@@ -27,6 +27,9 @@ override_dh_install:
 	done
 	rm -rf $(CURDIR)/debian/python*-pysaml2/usr/lib/python*/dist-packages/*.pth
 
+override_dh_python3:
+	dh_python3 --shebang=/usr/bin/python3
+
 override_dh_auto_test:
 ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
 	set -e && for pyvers in 2.7 $(PYTHON3S) ; do \
