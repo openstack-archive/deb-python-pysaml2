@@ -1,3 +1,9 @@
+python-pysaml2 (3.0.0-4) UNRELEASED; urgency=medium
+
+  * Fixed VCS URLs (https).
+
+ -- Ondřej Nový <novy@ondrej.org>  Sun, 28 Feb 2016 15:47:50 +0100
+
 python-pysaml2 (3.0.0-3) unstable; urgency=medium
 
   * override_dh_python3 to fix Py3 shebang.
