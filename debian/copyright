@@ -1,6 +1,6 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: pysaml2
-Source: git://github.com/rohe/pysaml2.git
+Source: https://github.com/rohe/pysaml2
 
 Files: debian/*
 Copyright: (c) 2014, Thomas Goirand <zigo@debian.org>
