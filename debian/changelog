@@ -3,6 +3,8 @@ python-pysaml2 (3.0.0-4) UNRELEASED; urgency=medium
   * Fixed VCS URLs (https).
   * d/rules: Changed UPSTREAM_GIT protocol to https
   * d/copyright: Changed source URL to https protocol
+  [ gustavo panizzo ]
+  * Increase the minimun version of python-pyasn1 required.
 
  -- Ondřej Nový <novy@ondrej.org>  Sun, 28 Feb 2016 15:47:50 +0100
 
