@@ -1,0 +1,10 @@
+Code-Review+2: Thomas Goirand <thomas@goirand.fr>
+Workflow+1: Thomas Goirand <thomas@goirand.fr>
+Code-Review+1: lidong <lidongbj@inspur.com>
+Code-Review+1: ShangXiao <shangxiaobj@inspur.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 05 Sep 2016 08:54:13 +0000
+Reviewed-on: https://review.openstack.org/365479
+Project: openstack/deb-python-pysaml2
+Branch: refs/heads/debian/newton
