@@ -1,8 +1,12 @@
-python-pysaml2 (3.0.0-5) UNRELEASED; urgency=medium
+python-pysaml2 (3.0.0-5) unstable; urgency=medium
 
+  [ Ondřej Nový ]
   * Bumped debhelper compat version to 10
 
- -- Ondřej Nový <onovy@debian.org>  Thu, 24 Nov 2016 00:10:41 +0100
+  [ Thomas Goirand ]
+  * Add upstream patch for XML External Entity attack (Closes: #850716).
+
+ -- Thomas Goirand <zigo@debian.org>  Mon, 09 Jan 2017 16:28:55 +0100
 
 python-pysaml2 (3.0.0-4) unstable; urgency=medium
 
