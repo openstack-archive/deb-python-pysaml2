@@ -100,7 +100,7 @@ def do_request(client, url, method, body="", headers=None):
     :param url: Where to send the request
     :param method: The HTTP method to use for the request
     :param body: The request body
-    :param headers: The requset headers
+    :param headers: The request headers
     :return: A tuple of
         url - the url the request was sent to
         response - the response to the request
